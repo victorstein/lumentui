@@ -51,7 +51,11 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
   };
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={theme.colors.border}>
+    <Box
+      flexDirection="column"
+      borderStyle="single"
+      borderColor={theme.colors.border}
+    >
       {/* Header */}
       <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1}>
         <Text bold color={theme.colors.primary}>
@@ -66,7 +70,9 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
         ) : (
           logs.map((log, index) => (
             <Box key={index}>
-              <Text color={theme.colors.textDim}>[{formatTime(log.timestamp)}]</Text>
+              <Text color={theme.colors.textDim}>
+                [{formatTime(log.timestamp)}]
+              </Text>
               <Text> </Text>
               <Text color={getLogColor(log.level)}>
                 {getLogSymbol(log.level)} {log.level.toUpperCase()}:

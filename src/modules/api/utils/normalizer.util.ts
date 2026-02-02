@@ -6,13 +6,17 @@ export class ProductNormalizer {
    * Convert Shopify product to internal DTO
    */
   static normalize(product: ShopifyProduct, baseUrl: string): ProductDto {
-    // Calculate min price from variants
-    const minPrice = Math.min(
-      ...product.variants.map((v) => parseFloat(v.price)),
-    );
+    // Calculate min price from variants (handle empty variants array)
+    const minPrice =
+      product.variants.length > 0
+        ? Math.min(...product.variants.map((v) => parseFloat(v.price)))
+        : 0;
 
-    // Check if any variant is available
-    const available = product.variants.some((v) => v.inventory_quantity > 0);
+    // Check if any variant is available (handle empty variants array)
+    const available =
+      product.variants.length > 0
+        ? product.variants.some((v) => v.inventory_quantity > 0)
+        : false;
 
     // Strip HTML from description
     const description = product.body_html

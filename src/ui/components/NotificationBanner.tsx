@@ -10,7 +10,9 @@ interface NotificationBannerProps {
 /**
  * Notification banner for new products
  */
-export const NotificationBanner: React.FC<NotificationBannerProps> = ({ product }) => {
+export const NotificationBanner: React.FC<NotificationBannerProps> = ({
+  product,
+}) => {
   if (!product) {
     return null;
   }
@@ -47,7 +49,13 @@ export const NotificationBanner: React.FC<NotificationBannerProps> = ({ product 
             Price: ${product.variants[0].price}
           </Text>
           <Text> • </Text>
-          <Text color={product.available ? theme.colors.available : theme.colors.unavailable}>
+          <Text
+            color={
+              product.available
+                ? theme.colors.available
+                : theme.colors.unavailable
+            }
+          >
             {product.available ? 'Available' : 'Sold Out'}
           </Text>
         </Box>

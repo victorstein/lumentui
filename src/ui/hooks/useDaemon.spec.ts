@@ -29,7 +29,7 @@ import * as ipc from 'node-ipc';
 
 /**
  * Tests for useDaemon hook
- * 
+ *
  * Note: These tests mock node-ipc to avoid actual socket connections
  */
 
@@ -39,7 +39,7 @@ describe('useDaemon', () => {
   beforeEach(() => {
     // Reset mocks
     mockEventHandlers = {};
-    
+
     // Reset mock client functions
     mockIpcClient.on = jest.fn((event: string, handler: Function) => {
       mockEventHandlers[event] = handler;
@@ -47,9 +47,11 @@ describe('useDaemon', () => {
     mockIpcClient.emit = jest.fn();
 
     // Mock connectTo to invoke callback immediately
-    mockIpc.connectTo = jest.fn((id: string, path: string, callback: Function) => {
-      callback();
-    });
+    mockIpc.connectTo = jest.fn(
+      (id: string, path: string, callback: Function) => {
+        callback();
+      },
+    );
   });
 
   afterEach(() => {
@@ -166,7 +168,7 @@ describe('useDaemon', () => {
 
   it('should clear notification after 5 seconds', () => {
     jest.useFakeTimers();
-    
+
     const { result } = renderHook(() => useDaemon());
     const mockProduct = {
       id: 1,

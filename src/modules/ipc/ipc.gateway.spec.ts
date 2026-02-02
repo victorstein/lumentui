@@ -98,9 +98,18 @@ describe('IpcGateway', () => {
     it('should setup event handlers', async () => {
       await gateway.onModuleInit();
 
-      expect(ipc.server.on).toHaveBeenCalledWith('connect', expect.any(Function));
-      expect(ipc.server.on).toHaveBeenCalledWith('disconnect', expect.any(Function));
-      expect(ipc.server.on).toHaveBeenCalledWith('force-poll', expect.any(Function));
+      expect(ipc.server.on).toHaveBeenCalledWith(
+        'connect',
+        expect.any(Function),
+      );
+      expect(ipc.server.on).toHaveBeenCalledWith(
+        'disconnect',
+        expect.any(Function),
+      );
+      expect(ipc.server.on).toHaveBeenCalledWith(
+        'force-poll',
+        expect.any(Function),
+      );
       expect(ipc.server.on).toHaveBeenCalledWith('error', expect.any(Function));
     });
 
@@ -273,6 +282,114 @@ describe('IpcGateway', () => {
 
       // Should only be called once
       expect(ipc.serve).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Force Poll Handler', () => {
+    let forcePollHandler: (data: any, socket: any) => Promise<void>;
+    const mockSocket = { id: 'test-socket' };
+
+    beforeEach(async () => {
+      await gateway.onModuleInit();
+
+      // Extract the force-poll handler
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const forcePollCall = calls.find((call) => call[0] === 'force-poll');
+      forcePollHandler = forcePollCall[1];
+    });
+
+    it('should handle force-poll with successful result', async () => {
+      const mockResult = {
+        success: true,
+        productCount: 10,
+        newProducts: 2,
+        durationMs: 1500,
+      };
+
+      const mockSchedulerService = {
+        forcePoll: jest.fn().mockResolvedValue(mockResult),
+      };
+
+      gateway.setSchedulerService(mockSchedulerService);
+
+      await forcePollHandler({}, mockSocket);
+
+      expect(mockSchedulerService.forcePoll).toHaveBeenCalled();
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'force-poll-received',
+        expect.any(Object),
+      );
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'force-poll-result',
+        expect.objectContaining({
+          success: true,
+          productCount: 10,
+          newProducts: 2,
+          durationMs: 1500,
+        }),
+      );
+    });
+
+    it('should handle force-poll with error result', async () => {
+      const mockResult = {
+        success: false,
+        productCount: 0,
+        newProducts: 0,
+        durationMs: 0,
+        error: 'Poll already in progress',
+      };
+
+      const mockSchedulerService = {
+        forcePoll: jest.fn().mockResolvedValue(mockResult),
+      };
+
+      gateway.setSchedulerService(mockSchedulerService);
+
+      await forcePollHandler({}, mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'force-poll-result',
+        expect.objectContaining({
+          success: false,
+          error: 'Poll already in progress',
+        }),
+      );
+    });
+
+    it('should handle force-poll when SchedulerService throws error', async () => {
+      const mockSchedulerService = {
+        forcePoll: jest.fn().mockRejectedValue(new Error('Test error')),
+      };
+
+      gateway.setSchedulerService(mockSchedulerService);
+
+      await forcePollHandler({}, mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'force-poll-result',
+        expect.objectContaining({
+          success: false,
+          error: 'Test error',
+        }),
+      );
+    });
+
+    it('should handle force-poll when SchedulerService is not set', async () => {
+      // Don't set scheduler service
+      await forcePollHandler({}, mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'force-poll-result',
+        expect.objectContaining({
+          success: false,
+          error: 'SchedulerService not available',
+        }),
+      );
     });
   });
 });

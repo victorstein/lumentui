@@ -3,7 +3,7 @@
 > Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time WhatsApp notifications
 
 [![Tests](https://img.shields.io/badge/tests-76%20passing-brightgreen)]()
-[![Coverage](https://img.shields.io/badge/coverage-93%25%20(core)-green)]()
+[![Coverage](<https://img.shields.io/badge/coverage-93%25%20(core)-green>)]()
 [![NestJS](https://img.shields.io/badge/NestJS-11.x-red)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)]()
 
@@ -115,6 +115,7 @@ node dist/cli.js auth
 ```
 
 Expected output:
+
 ```
 🔐 Extracting cookies from Chrome...
 ⚠️  macOS will ask for Keychain permission (first time only)
@@ -193,6 +194,7 @@ npm run test:cov
 ```
 
 Expected output:
+
 ```
 Test Suites: 6 passed, 6 total
 Tests:       76 passed, 76 total
@@ -201,14 +203,14 @@ Coverage:    93%+ (core services average)
 
 ### Test Files
 
-| Module | Tests | Coverage |
-|--------|-------|----------|
-| **AuthService** | Unit tests | 91.04% |
-| **ShopifyService** | Unit tests | 85.71% |
-| **DatabaseService** | Unit tests | 98.24% |
-| **NotificationService** | Unit tests | 100% |
-| **SchedulerService** | Unit tests | 93.54% |
-| **AppController** | Unit tests | 100% |
+| Module                  | Tests      | Coverage |
+| ----------------------- | ---------- | -------- |
+| **AuthService**         | Unit tests | 91.04%   |
+| **ShopifyService**      | Unit tests | 85.71%   |
+| **DatabaseService**     | Unit tests | 98.24%   |
+| **NotificationService** | Unit tests | 100%     |
+| **SchedulerService**    | Unit tests | 93.54%   |
+| **AppController**       | Unit tests | 100%     |
 
 ---
 
@@ -230,16 +232,16 @@ GET  /api/health           // Health check
 
 ### Environment Variables
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `NOTIFICATION_PHONE` | WhatsApp target (E.164) | - | ✅ |
-| `LUMENTUI_SHOP_URL` | Shopify store URL | https://shop.lumenalta.com | ✅ |
-| `DB_PATH` | SQLite database path | data/lumentui.db | ❌ |
-| `LOG_LEVEL` | Logging level | info | ❌ |
-| `LOG_FILE` | Log file path | data/logs/app.log | ❌ |
-| `SHOPIFY_TIMEOUT_MS` | API timeout | 10000 | ❌ |
-| `SHOPIFY_RETRY_ATTEMPTS` | Retry attempts | 3 | ❌ |
-| `LUMENTUI_COOKIES` | Manual cookie override | - | ❌ |
+| Variable                 | Description             | Default                    | Required |
+| ------------------------ | ----------------------- | -------------------------- | -------- |
+| `NOTIFICATION_PHONE`     | WhatsApp target (E.164) | -                          | ✅       |
+| `LUMENTUI_SHOP_URL`      | Shopify store URL       | https://shop.lumenalta.com | ✅       |
+| `DB_PATH`                | SQLite database path    | data/lumentui.db           | ❌       |
+| `LOG_LEVEL`              | Logging level           | info                       | ❌       |
+| `LOG_FILE`               | Log file path           | data/logs/app.log          | ❌       |
+| `SHOPIFY_TIMEOUT_MS`     | API timeout             | 10000                      | ❌       |
+| `SHOPIFY_RETRY_ATTEMPTS` | Retry attempts          | 3                          | ❌       |
+| `LUMENTUI_COOKIES`       | Manual cookie override  | -                          | ❌       |
 
 ### Database Schema
 
@@ -332,6 +334,7 @@ lumentui/
 **Problem:** `❌ Failed to extract cookies`
 
 **Solution:**
+
 1. Open Chrome and log into shop.lumenalta.com
 2. Grant Keychain access when prompted
 3. Run `node dist/cli.js auth` again
@@ -339,6 +342,7 @@ lumentui/
 **Problem:** `❌ No valid session`
 
 **Solution:**
+
 ```bash
 # Clear old cookies
 rm data/cookies.json
@@ -354,6 +358,7 @@ node dist/cli.js auth
 **Problem:** `SQLITE_ERROR: database is locked`
 
 **Solution:**
+
 ```bash
 # Stop all running instances
 pkill -f lumentui
@@ -365,6 +370,7 @@ rm data/lumentui.db-wal data/lumentui.db-shm
 **Problem:** Database corruption
 
 **Solution:**
+
 ```bash
 # Backup old database
 cp data/lumentui.db data/lumentui.db.backup
@@ -381,9 +387,11 @@ npm run start:dev  # Database will be recreated
 **Problem:** WhatsApp notifications not sending
 
 **Solution:**
+
 1. Verify Clawdbot is running: `clawdbot gateway status`
 2. Check phone number format: Must be E.164 (e.g., `+50586826131`)
 3. Test notification manually:
+
 ```bash
 message --action=send --channel=whatsapp --target=+50586826131 --message="Test"
 ```
@@ -395,12 +403,14 @@ message --action=send --channel=whatsapp --target=+50586826131 --message="Test"
 **Problem:** `ShopifyApiException: Request failed with status 429`
 
 **Solution:**
+
 - Rate limit hit. Increase `LUMENTUI_POLL_INTERVAL` in `.env`
 - Default: 60 seconds. Try 120 seconds.
 
 **Problem:** `ShopifyApiException: Request timed out`
 
 **Solution:**
+
 ```bash
 # Increase timeout in .env
 SHOPIFY_TIMEOUT_MS=30000
@@ -414,6 +424,7 @@ SHOPIFY_RETRY_ATTEMPTS=5
 **Problem:** Tests failing with "Cannot find module"
 
 **Solution:**
+
 ```bash
 # Clean install
 rm -rf node_modules package-lock.json
@@ -428,6 +439,7 @@ npm test
 
 **Solution:**
 Tests use in-memory SQLite by default. If issues persist:
+
 ```bash
 # Use separate test database
 DB_PATH=:memory: npm test
@@ -447,11 +459,13 @@ DB_PATH=:memory: npm test
 ### Optimization Tips
 
 1. **Increase poll interval** for lower CPU usage:
+
    ```bash
    LUMENTUI_POLL_INTERVAL=300  # 5 minutes
    ```
 
 2. **Enable database WAL mode** for better concurrency:
+
    ```sql
    PRAGMA journal_mode=WAL;
    ```
@@ -510,6 +524,7 @@ npm run start:debug
 ### Cookie Storage
 
 Cookies are extracted from Chrome Keychain (encrypted) and stored in:
+
 ```
 data/cookies.json  # gitignored, chmod 600
 ```
@@ -547,6 +562,7 @@ GitHub: [@steinhakase](https://github.com/steinhakase)
 ### v1.0.0 (2025-01-21)
 
 ✅ Initial release with complete implementation:
+
 - Auth module with Chrome cookie extraction
 - API module with Shopify integration + retry logic
 - Storage module with SQLite persistence
@@ -563,6 +579,7 @@ GitHub: [@steinhakase](https://github.com/steinhakase)
 ## 🚀 Roadmap
 
 ### Phase 2 (Planned)
+
 - [ ] Daemon mode with PM2
 - [ ] Ink-based TUI (React)
 - [ ] IPC communication (Unix sockets)
@@ -571,6 +588,7 @@ GitHub: [@steinhakase](https://github.com/steinhakase)
 - [ ] Log streaming panel
 
 ### Phase 3 (Future)
+
 - [ ] REST API endpoints
 - [ ] Swagger documentation
 - [ ] Docker support

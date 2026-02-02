@@ -7,6 +7,9 @@ import { DatabaseService } from '../storage/database/database.service';
 import { ProductNormalizer } from '../api/utils/normalizer.util';
 import { ProductDto } from '../api/dto/product.dto';
 import { IpcGateway } from '../ipc/ipc.gateway';
+import { NotificationService } from '../notification/notification.service';
+import { DifferService } from '../differ/differ.service';
+import { StorageNormalizer } from '../storage/utils/storage-normalizer.util';
 
 @Injectable()
 export class SchedulerService implements OnModuleInit {
@@ -19,11 +22,15 @@ export class SchedulerService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly logger: LoggerService,
     private readonly ipcGateway: IpcGateway,
+    private readonly notificationService: NotificationService,
+    private readonly differService: DifferService,
   ) {}
 
   onModuleInit() {
     this.logger.log('SchedulerService initialized', 'SchedulerService');
     this.setupPolls();
+    // Wire up force-poll handler in IpcGateway
+    this.ipcGateway.setSchedulerService(this);
   }
 
   /**
@@ -123,10 +130,16 @@ export class SchedulerService implements OnModuleInit {
         }
       }
 
-      // Get existing products to detect new ones
-      const existingProductIds = new Set(
-        this.databaseService.getProducts().map((p) => p.id),
+      // Get existing products and use DifferService to detect new ones
+      const existingProductEntities = this.databaseService.getProducts();
+      const existingProducts = StorageNormalizer.fromEntities(
+        existingProductEntities,
       );
+      const { newProducts: newProductList } = this.differService.compare(
+        existingProducts,
+        productsToSave,
+      );
+      const newProducts = newProductList.length;
 
       // Save products to database
       const savedCount = this.databaseService.saveProducts(productsToSave);
@@ -134,15 +147,50 @@ export class SchedulerService implements OnModuleInit {
       // Emit products updated event
       this.ipcGateway.emitProductsUpdated(productsToSave);
 
-      // Count new products and emit events for each
-      const newProductList = productsToSave.filter(
-        (p) => !existingProductIds.has(p.id),
-      );
-      const newProducts = newProductList.length;
-
       // Emit individual new product events
       for (const newProduct of newProductList) {
         this.ipcGateway.emitProductNew(newProduct);
+      }
+
+      // Send notifications for new products
+      const phoneNumber =
+        this.configService.get<string>('LUMENTUI_NOTIFICATION_PHONE') ||
+        process.env.LUMENTUI_NOTIFICATION_PHONE;
+
+      if (newProductList.length > 0 && phoneNumber) {
+        this.logger.log(
+          `Processing notifications for ${newProductList.length} new products`,
+          'SchedulerService',
+        );
+
+        for (const newProduct of newProductList) {
+          try {
+            // Check if product should be notified based on filters
+            if (this.notificationService.shouldNotify(newProduct)) {
+              await this.notificationService.sendAvailabilityNotification(
+                newProduct,
+                phoneNumber,
+              );
+            } else {
+              this.logger.log(
+                `Product ${newProduct.id} filtered out by notification rules`,
+                'SchedulerService',
+              );
+            }
+          } catch (error) {
+            // Log error but don't break the poll flow
+            this.logger.error(
+              `Failed to send notification for product ${newProduct.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              error instanceof Error ? error.stack : undefined,
+              'SchedulerService',
+            );
+          }
+        }
+      } else if (newProductList.length > 0 && !phoneNumber) {
+        this.logger.warn(
+          'New products detected but LUMENTUI_NOTIFICATION_PHONE is not set - skipping notifications',
+          'SchedulerService',
+        );
       }
 
       const durationMs = Date.now() - startTime;
@@ -204,6 +252,38 @@ export class SchedulerService implements OnModuleInit {
     } finally {
       this.isPolling = false;
     }
+  }
+
+  /**
+   * Force an immediate poll, bypassing the cron schedule
+   * Respects the existing isPolling flag to prevent concurrent polls
+   */
+  async forcePoll(): Promise<{
+    success: boolean;
+    productCount: number;
+    newProducts: number;
+    durationMs: number;
+    error?: string;
+  }> {
+    this.logger.log('Force poll requested', 'SchedulerService');
+
+    // Check if already polling
+    if (this.isPolling) {
+      this.logger.warn(
+        'Poll already in progress, cannot force poll',
+        'SchedulerService',
+      );
+      return {
+        success: false,
+        productCount: 0,
+        newProducts: 0,
+        durationMs: 0,
+        error: 'Poll already in progress',
+      };
+    }
+
+    // Execute the poll immediately
+    return this.handlePoll();
   }
 
   /**

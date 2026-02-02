@@ -29,7 +29,11 @@ export const Header: React.FC<HeaderProps> = ({ connected, lastHeartbeat }) => {
     } else if (secondsAgo < 120) {
       return <Text color={theme.colors.warning}>Stale (1m)</Text>;
     } else {
-      return <Text color={theme.colors.error}>Stale ({Math.floor(secondsAgo / 60)}m)</Text>;
+      return (
+        <Text color={theme.colors.error}>
+          Stale ({Math.floor(secondsAgo / 60)}m)
+        </Text>
+      );
     }
   };
 
@@ -43,7 +47,12 @@ export const Header: React.FC<HeaderProps> = ({ connected, lastHeartbeat }) => {
       </Box>
 
       {/* Status bar */}
-      <Box justifyContent="space-between" borderStyle="single" borderColor={theme.colors.border} paddingX={1}>
+      <Box
+        justifyContent="space-between"
+        borderStyle="single"
+        borderColor={theme.colors.border}
+        paddingX={1}
+      >
         <Box>
           <Text dimColor>Status: </Text>
           {getHeartbeatStatus()}

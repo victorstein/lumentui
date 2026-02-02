@@ -5,6 +5,8 @@ import { ShopifyService } from '../api/shopify/shopify.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { LoggerService } from '../../common/logger/logger.service';
 import { IpcGateway } from '../ipc/ipc.gateway';
+import { NotificationService } from '../notification/notification.service';
+import { DifferService } from '../differ/differ.service';
 import { ShopifyProduct } from '../api/interfaces/shopify.interface';
 import { ProductEntity } from '../storage/entities/product.entity';
 
@@ -15,6 +17,8 @@ describe('SchedulerService', () => {
   let configService: jest.Mocked<ConfigService>;
   let loggerService: jest.Mocked<LoggerService>;
   let ipcGateway: jest.Mocked<IpcGateway>;
+  let notificationService: jest.Mocked<NotificationService>;
+  let differService: jest.Mocked<DifferService>;
 
   // Mock data
   const mockShopifyProducts: ShopifyProduct[] = [
@@ -124,6 +128,19 @@ describe('SchedulerService', () => {
       emitError: jest.fn(),
       emitLog: jest.fn(),
       getStatus: jest.fn(),
+      setSchedulerService: jest.fn(),
+    };
+
+    const mockNotificationService = {
+      shouldNotify: jest.fn(),
+      sendAvailabilityNotification: jest.fn(),
+      getNotificationHistory: jest.fn(),
+      clearRateLimitCache: jest.fn(),
+      getRateLimitStatus: jest.fn(),
+    };
+
+    const mockDifferService = {
+      compare: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -149,6 +166,14 @@ describe('SchedulerService', () => {
           provide: IpcGateway,
           useValue: mockIpcGateway,
         },
+        {
+          provide: NotificationService,
+          useValue: mockNotificationService,
+        },
+        {
+          provide: DifferService,
+          useValue: mockDifferService,
+        },
       ],
     }).compile();
 
@@ -158,6 +183,8 @@ describe('SchedulerService', () => {
     configService = module.get(ConfigService);
     loggerService = module.get(LoggerService);
     ipcGateway = module.get(IpcGateway);
+    notificationService = module.get(NotificationService);
+    differService = module.get(DifferService);
   });
 
   afterEach(() => {
@@ -212,6 +239,11 @@ describe('SchedulerService', () => {
     beforeEach(() => {
       // Reset polling state
       (service as any).isPolling = false;
+      // Setup default differ mock - tests can override this
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [],
+      });
     });
 
     it('should successfully poll and save products', async () => {
@@ -219,6 +251,44 @@ describe('SchedulerService', () => {
       databaseService.getProducts.mockReturnValue([]);
       databaseService.saveProducts.mockReturnValue(1);
       databaseService.recordPoll.mockReturnValue(1);
+      // Mock differ to return the new product
+      differService.compare.mockReturnValue({
+        newProducts: [
+          {
+            id: '123456',
+            title: 'Test Product',
+            handle: 'test-product',
+            url: 'https://shop.lumenalta.com/products/test-product',
+            vendor: 'Test Vendor',
+            product_type: 'Test Type',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            published_at: '2024-01-01T00:00:00Z',
+            status: 'active',
+            variants: [],
+            images: [],
+            tags: [],
+            options: [],
+          },
+        ],
+        updatedProducts: [],
+      });
+      differService.compare.mockReturnValue({
+        newProducts: [
+          {
+            id: '123456',
+            title: 'Test Product',
+            handle: 'test-product',
+            price: 99.99,
+            available: true,
+            variants: [],
+            images: [],
+            description: 'Test description',
+            url: 'https://shop.lumenalta.com/products/test-product',
+          },
+        ],
+        updatedProducts: [],
+      });
 
       const result = await service.handlePoll();
 
@@ -235,7 +305,7 @@ describe('SchedulerService', () => {
           newProducts: 1,
         }),
       );
-      
+
       // Verify IPC events
       expect(ipcGateway.emitProductsUpdated).toHaveBeenCalled();
       expect(ipcGateway.emitProductNew).toHaveBeenCalled();
@@ -247,6 +317,22 @@ describe('SchedulerService', () => {
       databaseService.getProducts.mockReturnValue(mockExistingProducts);
       databaseService.saveProducts.mockReturnValue(1);
       databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [
+          {
+            id: '123456',
+            title: 'Test Product',
+            handle: 'test-product',
+            price: 99.99,
+            available: true,
+            variants: [],
+            images: [],
+            description: 'Test description',
+            url: 'https://shop.lumenalta.com/products/test-product',
+          },
+        ],
+        updatedProducts: [],
+      });
 
       const result = await service.handlePoll();
 
@@ -318,7 +404,7 @@ describe('SchedulerService', () => {
           error: 'Shopify API error',
         }),
       );
-      
+
       // Verify error emitted via IPC
       expect(ipcGateway.emitError).toHaveBeenCalledWith('Shopify API error');
     });
@@ -366,6 +452,66 @@ describe('SchedulerService', () => {
           durationMs: expect.any(Number),
         }),
       );
+    });
+  });
+
+  describe('forcePoll', () => {
+    beforeEach(() => {
+      // Reset polling state
+      (service as any).isPolling = false;
+    });
+
+    it('should call handlePoll when not already polling', async () => {
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue([]);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      configService.get.mockReturnValue(undefined); // No phone number configured
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [],
+      });
+
+      // Spy on handlePoll
+      const handlePollSpy = jest.spyOn(service, 'handlePoll');
+
+      const result = await service.forcePoll();
+
+      expect(loggerService.log).toHaveBeenCalledWith(
+        'Force poll requested',
+        'SchedulerService',
+      );
+      expect(handlePollSpy).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.productCount).toBe(1);
+    });
+
+    it('should return early when already polling', async () => {
+      // Simulate ongoing poll
+      (service as any).isPolling = true;
+
+      const result = await service.forcePoll();
+
+      expect(loggerService.warn).toHaveBeenCalledWith(
+        'Poll already in progress, cannot force poll',
+        'SchedulerService',
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Poll already in progress');
+      expect(shopifyService.getProducts).not.toHaveBeenCalled();
+    });
+
+    it('should handle errors during force poll', async () => {
+      const error = new Error('Force poll error');
+      shopifyService.getProducts.mockRejectedValue(error);
+      databaseService.getProducts.mockReturnValue([]);
+      databaseService.recordPoll.mockReturnValue(1);
+
+      const result = await service.forcePoll();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Force poll error');
+      expect(loggerService.error).toHaveBeenCalled();
     });
   });
 

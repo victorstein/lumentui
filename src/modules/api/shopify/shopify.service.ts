@@ -4,6 +4,7 @@ import { AuthService } from '../../auth/auth.service';
 import { LoggerService } from '../../../common/logger/logger.service';
 import { firstValueFrom } from 'rxjs';
 import axiosRetry from 'axios-retry';
+import { AxiosError } from 'axios';
 import {
   ShopifyException,
   ShopifyAuthException,
@@ -78,17 +79,64 @@ export class ShopifyService implements OnModuleInit {
     }
   }
 
-  private handleError(error: any): never {
-    this.logger.error(
-      'Failed to fetch products',
-      error.stack,
-      'ShopifyService',
+  /**
+   * Type guard to check if an error is an Axios error
+   */
+  private isAxiosError(error: unknown): error is AxiosError {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'isAxiosError' in error &&
+      error.isAxiosError === true
     );
+  }
+
+  /**
+   * Type guard to check if an error has a code property
+   */
+  private hasErrorCode(error: unknown): error is { code: string } {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      typeof (error as { code: unknown }).code === 'string'
+    );
+  }
+
+  /**
+   * Type guard to check if an error has a message property
+   */
+  private hasErrorMessage(error: unknown): error is { message: string } {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'message' in error &&
+      typeof (error as { message: unknown }).message === 'string'
+    );
+  }
+
+  /**
+   * Type guard to check if an error has a stack property
+   */
+  private hasErrorStack(error: unknown): error is { stack: string } {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'stack' in error &&
+      typeof (error as { stack: unknown }).stack === 'string'
+    );
+  }
+
+  private handleError(error: unknown): never {
+    const errorStack = this.hasErrorStack(error) ? error.stack : undefined;
+    this.logger.error('Failed to fetch products', errorStack, 'ShopifyService');
 
     // Handle specific HTTP errors
-    if (error.response) {
+    if (this.isAxiosError(error) && error.response) {
       const status = error.response.status;
-      const message = error.response.data?.message || error.message;
+      const responseMessage =
+        (error.response.data as { message?: string } | undefined)?.message ||
+        error.message;
 
       if (status === 401 || status === 403) {
         throw new ShopifyAuthException(
@@ -106,35 +154,44 @@ export class ShopifyService implements OnModuleInit {
         throw new ShopifyException(
           `Shopify server error (${status}). Please try again later.`,
           status,
-          error,
+          error as Error,
         );
       }
 
-      throw new ShopifyException(`HTTP ${status}: ${message}`, status, error);
+      throw new ShopifyException(
+        `HTTP ${status}: ${responseMessage}`,
+        status,
+        error as Error,
+      );
     }
 
     // Handle network errors
-    if (error.code === 'ECONNABORTED') {
-      throw new ShopifyException(
-        'Request timeout. Please check your internet connection.',
-        undefined,
-        error,
-      );
-    }
+    if (this.hasErrorCode(error)) {
+      if (error.code === 'ECONNABORTED') {
+        throw new ShopifyException(
+          'Request timeout. Please check your internet connection.',
+          undefined,
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
 
-    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      throw new ShopifyException(
-        'Cannot reach Shopify. Please check your internet connection.',
-        undefined,
-        error,
-      );
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        throw new ShopifyException(
+          'Cannot reach Shopify. Please check your internet connection.',
+          undefined,
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
     }
 
     // Generic error
+    const errorMessage = this.hasErrorMessage(error)
+      ? error.message
+      : 'Unknown error';
     throw new ShopifyException(
-      `Unexpected error: ${error.message}`,
+      `Unexpected error: ${errorMessage}`,
       undefined,
-      error,
+      error instanceof Error ? error : new Error(String(error)),
     );
   }
 }

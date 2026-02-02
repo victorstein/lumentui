@@ -8,6 +8,8 @@ import { SchedulerService } from '../../src/modules/scheduler/scheduler.service'
 import { DatabaseService } from '../../src/modules/storage/database/database.service';
 import { ShopifyService } from '../../src/modules/api/shopify/shopify.service';
 import { NotificationService } from '../../src/modules/notification/notification.service';
+import { IpcGateway } from '../../src/modules/ipc/ipc.gateway';
+import { MockIpcGateway } from '../mocks/ipc.gateway.mock';
 import { ShopifyProduct } from '../../src/modules/api/interfaces/shopify.interface';
 import { ProductEntity } from '../../src/modules/storage/entities/product.entity';
 import { ProductDto } from '../../src/modules/api/dto/product.dto';
@@ -137,6 +139,7 @@ describe('LumenTUI E2E Integration Tests', () => {
           ignoreEnvFile: true,
           load: [
             () => ({
+              DB_PATH: TEST_DB_PATH,
               DATABASE_PATH: TEST_DB_PATH,
               NODE_ENV: 'test',
               NOTIFICATION_PHONE: '+50586826131', // Test phone
@@ -146,7 +149,10 @@ describe('LumenTUI E2E Integration Tests', () => {
         }),
         AppModule,
       ],
-    }).compile();
+    })
+      .overrideProvider(IpcGateway)
+      .useClass(MockIpcGateway)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -158,22 +164,14 @@ describe('LumenTUI E2E Integration Tests', () => {
     notificationService =
       moduleFixture.get<NotificationService>(NotificationService);
 
-    // Mock child_process.exec globally for notification tests
-    const childProcess = require('child_process');
+    // Mock notification service to be fast
     jest
-      .spyOn(childProcess, 'exec')
-      .mockImplementation((cmd: any, opts: any, callback?: any) => {
-        // Handle both (cmd, callback) and (cmd, opts, callback) signatures
-        const cb = typeof opts === 'function' ? opts : callback;
-        if (typeof cb === 'function') {
-          // Call callback in next tick to simulate async behavior
-          process.nextTick(() => cb(null, 'Message sent', ''));
-        }
-        return {
-          on: () => {},
-          stdout: { on: () => {} },
-          stderr: { on: () => {} },
-        } as any;
+      .spyOn(notificationService, 'sendAvailabilityNotification')
+      .mockImplementation(async (product: any, phoneNumber?: string) => {
+        // Fast mock implementation - just record the notification
+        notificationService['notificationCache'].set(product.id, Date.now());
+        notificationService['recordNotification'](product.id, true);
+        return true;
       });
   });
 
@@ -186,28 +184,35 @@ describe('LumenTUI E2E Integration Tests', () => {
     }
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Wait for any ongoing polls to complete
+    if (schedulerService) {
+      const maxWaitTime = 10000; // 10 seconds max wait
+      const startWait = Date.now();
+      while (schedulerService.getStatus().isPolling) {
+        if (Date.now() - startWait > maxWaitTime) {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
     // Restore all mocks
     jest.restoreAllMocks();
 
-    // Re-mock child_process.exec after restore
-    const childProcess = require('child_process');
-    jest
-      .spyOn(childProcess, 'exec')
-      .mockImplementation((cmd: any, opts: any, callback?: any) => {
-        const cb = typeof opts === 'function' ? opts : callback;
-        if (typeof cb === 'function') {
-          process.nextTick(() => cb(null, 'Message sent', ''));
-        }
-        return {
-          on: () => {},
-          stdout: { on: () => {} },
-          stderr: { on: () => {} },
-        } as any;
-      });
+    // Re-mock notification service after restore
+    if (notificationService) {
+      jest
+        .spyOn(notificationService, 'sendAvailabilityNotification')
+        .mockImplementation(async (product: any, phoneNumber?: string) => {
+          notificationService['notificationCache'].set(product.id, Date.now());
+          notificationService['recordNotification'](product.id, true);
+          return true;
+        });
 
-    // Clear notification rate limit cache between tests
-    notificationService.clearRateLimitCache();
+      // Clear notification rate limit cache between tests
+      notificationService.clearRateLimitCache();
+    }
 
     // Clear database between tests (delete in correct order for foreign keys)
     const db = databaseService.getDatabase();

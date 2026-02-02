@@ -54,17 +54,17 @@ Comprehensive architectural overview of the LumentuiAPI NestJS application.
 
 ### Component Responsibilities
 
-| Component | Responsibility | Technology |
-|-----------|---------------|------------|
-| **CLI** | User interface, command parsing | Commander.js |
-| **AppModule** | Root module, dependency injection | NestJS |
-| **AuthModule** | Cookie extraction, session management | chrome-cookies-secure |
-| **ApiModule** | Shopify API integration | Axios, axios-retry |
-| **StorageModule** | Data persistence | better-sqlite3 |
-| **SchedulerModule** | Periodic polling | @nestjs/schedule |
-| **NotificationModule** | WhatsApp messaging | Clawdbot CLI |
-| **IpcModule** | Inter-process communication | node-ipc |
-| **LoggerModule** | Structured logging | Winston |
+| Component              | Responsibility                        | Technology            |
+| ---------------------- | ------------------------------------- | --------------------- |
+| **CLI**                | User interface, command parsing       | Commander.js          |
+| **AppModule**          | Root module, dependency injection     | NestJS                |
+| **AuthModule**         | Cookie extraction, session management | chrome-cookies-secure |
+| **ApiModule**          | Shopify API integration               | Axios, axios-retry    |
+| **StorageModule**      | Data persistence                      | better-sqlite3        |
+| **SchedulerModule**    | Periodic polling                      | @nestjs/schedule      |
+| **NotificationModule** | WhatsApp messaging                    | Clawdbot CLI          |
+| **IpcModule**          | Inter-process communication           | node-ipc              |
+| **LoggerModule**       | Structured logging                    | Winston               |
 
 ---
 
@@ -120,19 +120,19 @@ auth/
 @Injectable()
 export class AuthService {
   // Extract cookies from Chrome Keychain
-  async extractCookies(url: string): Promise<Cookie[]>
-  
+  async extractCookies(url: string): Promise<Cookie[]>;
+
   // Save cookies to data/cookies.json
-  async saveCookies(cookies: Cookie[]): Promise<void>
-  
+  async saveCookies(cookies: Cookie[]): Promise<void>;
+
   // Load cookies from storage
-  async loadCookies(): Promise<Cookie[]>
-  
+  async loadCookies(): Promise<Cookie[]>;
+
   // Validate current session
-  async validateCookies(): Promise<boolean>
-  
+  async validateCookies(): Promise<boolean>;
+
   // Get cookie header string for API requests
-  getCookieHeader(): string
+  getCookieHeader(): string;
 }
 ```
 
@@ -187,16 +187,16 @@ api/shopify/
 @Injectable()
 export class ShopifyService {
   // Fetch all products from storefront
-  async fetchProducts(): Promise<Product[]>
-  
+  async fetchProducts(): Promise<Product[]>;
+
   // Fetch product by handle
-  async fetchProductByHandle(handle: string): Promise<Product>
-  
+  async fetchProductByHandle(handle: string): Promise<Product>;
+
   // Check product availability
-  async checkAvailability(handle: string): Promise<boolean>
-  
+  async checkAvailability(handle: string): Promise<boolean>;
+
   // Get product variants
-  async getVariants(productId: string): Promise<Variant[]>
+  async getVariants(productId: string): Promise<Variant[]>;
 }
 ```
 
@@ -210,21 +210,23 @@ axiosRetry(axios, {
   retries: 3,
   retryDelay: axiosRetry.exponentialDelay,
   retryCondition: (error) => {
-    return axiosRetry.isNetworkOrIdempotentRequestError(error) 
-      || error.response?.status === 429;
+    return (
+      axiosRetry.isNetworkOrIdempotentRequestError(error) ||
+      error.response?.status === 429
+    );
   },
 });
 ```
 
 #### Error Handling
 
-| Error Type | HTTP Status | Retry? | Action |
-|------------|-------------|--------|--------|
-| Network Error | - | ✅ | Exponential backoff |
-| 429 Rate Limit | 429 | ✅ | Retry after delay |
-| 401 Unauthorized | 401 | ❌ | Re-authenticate |
-| 500 Server Error | 500 | ✅ | Retry 3 times |
-| 404 Not Found | 404 | ❌ | Return empty |
+| Error Type       | HTTP Status | Retry? | Action              |
+| ---------------- | ----------- | ------ | ------------------- |
+| Network Error    | -           | ✅     | Exponential backoff |
+| 429 Rate Limit   | 429         | ✅     | Retry after delay   |
+| 401 Unauthorized | 401         | ❌     | Re-authenticate     |
+| 500 Server Error | 500         | ✅     | Retry 3 times       |
+| 404 Not Found    | 404         | ❌     | Return empty        |
 
 ---
 
@@ -253,28 +255,28 @@ storage/
 @Injectable()
 export class DatabaseService implements OnModuleInit {
   // Initialize database and create tables
-  onModuleInit(): Promise<void>
-  
+  onModuleInit(): Promise<void>;
+
   // Save single product
-  async saveProduct(product: Product): Promise<void>
-  
+  async saveProduct(product: Product): Promise<void>;
+
   // Save multiple products
-  async saveProducts(products: Product[]): Promise<void>
-  
+  async saveProducts(products: Product[]): Promise<void>;
+
   // Get product by ID
-  async getProduct(id: string): Promise<Product | null>
-  
+  async getProduct(id: string): Promise<Product | null>;
+
   // Get product by handle
-  async getProductByHandle(handle: string): Promise<Product | null>
-  
+  async getProductByHandle(handle: string): Promise<Product | null>;
+
   // Get all products
-  async getAllProducts(): Promise<Product[]>
-  
+  async getAllProducts(): Promise<Product[]>;
+
   // Update product availability
-  async updateAvailability(id: string, available: boolean): Promise<void>
-  
+  async updateAvailability(id: string, available: boolean): Promise<void>;
+
   // Delete product
-  async deleteProduct(id: string): Promise<void>
+  async deleteProduct(id: string): Promise<void>;
 }
 ```
 
@@ -293,7 +295,7 @@ private stmt = {
     SELECT * FROM products ORDER BY last_seen_at DESC
   `),
   update: this.db.prepare(`
-    UPDATE products SET available_for_sale = ?, last_available_at = ? 
+    UPDATE products SET available_for_sale = ?, last_available_at = ?
     WHERE id = ?
   `),
 };
@@ -323,10 +325,10 @@ export class SchedulerService {
   // Poll products every 30 minutes
   @Cron('*/30 * * * *')
   async pollProducts(): Promise<void>
-  
+
   // Manual trigger for testing
   async triggerPoll(): Promise<void>
-  
+
   // Get last poll timestamp
   getLastPollTime(): Date | null
 }
@@ -393,16 +395,16 @@ notification/
 @Injectable()
 export class NotificationService {
   // Send product notification
-  async notifyProductAvailable(product: Product): Promise<void>
-  
+  async notifyProductAvailable(product: Product): Promise<void>;
+
   // Send custom message
-  async sendMessage(message: string): Promise<void>
-  
+  async sendMessage(message: string): Promise<void>;
+
   // Check if product was recently notified
-  private shouldNotify(productId: string): boolean
-  
+  private shouldNotify(productId: string): boolean;
+
   // Rate limiting: 1 notification per hour per product
-  private lastNotified: Map<string, Date> = new Map()
+  private lastNotified: Map<string, Date> = new Map();
 }
 ```
 
@@ -452,7 +454,7 @@ ipc/
 
 ```typescript
 // Server (daemon)
-@WebSocketGateway({ 
+@WebSocketGateway({
   namespace: '/lumentui',
   path: '/tmp/lumentui.sock',
 })
@@ -461,7 +463,7 @@ export class IpcGateway {
   handleStatus(client: Socket, data: any): any {
     return { status: 'running', uptime: process.uptime() };
   }
-  
+
   @SubscribeMessage('list')
   handleList(client: Socket): any {
     return this.databaseService.getAllProducts();
@@ -477,14 +479,14 @@ socket.emit('status', {}, (response) => {
 
 #### IPC Messages
 
-| Message | Direction | Payload | Response |
-|---------|-----------|---------|----------|
-| `status` | CLI → Daemon | `{}` | `{ status, uptime, lastPoll }` |
-| `list` | CLI → Daemon | `{}` | `Product[]` |
-| `start` | CLI → Daemon | `{}` | `{ success: true }` |
-| `stop` | CLI → Daemon | `{}` | `{ success: true }` |
-| `product:new` | Daemon → TUI | `Product` | - |
-| `product:updated` | Daemon → TUI | `Product` | - |
+| Message           | Direction    | Payload   | Response                       |
+| ----------------- | ------------ | --------- | ------------------------------ |
+| `status`          | CLI → Daemon | `{}`      | `{ status, uptime, lastPoll }` |
+| `list`            | CLI → Daemon | `{}`      | `Product[]`                    |
+| `start`           | CLI → Daemon | `{}`      | `{ success: true }`            |
+| `stop`            | CLI → Daemon | `{}`      | `{ success: true }`            |
+| `product:new`     | Daemon → TUI | `Product` | -                              |
+| `product:updated` | Daemon → TUI | `Product` | -                              |
 
 ---
 
@@ -505,7 +507,7 @@ socket.emit('status', {}, (response) => {
                          ▼
    Save to: data/cookies.json
                          │
-                         
+
 ┌─────────────────────────────────────────────────────────────┐
 │  Step 2: Daemon Startup                                      │
 └─────────────────────────────────────────────────────────────┘
@@ -521,7 +523,7 @@ socket.emit('status', {}, (response) => {
                          ▼
    IpcGateway → Listen on /tmp/lumentui.sock
                          │
-                         
+
 ┌─────────────────────────────────────────────────────────────┐
 │  Step 3: Polling Cycle (every 30 minutes)                   │
 └─────────────────────────────────────────────────────────────┘
@@ -557,7 +559,7 @@ socket.emit('status', {}, (response) => {
      │
      └─> IpcGateway.emit('product:updated')
                          │
-                         
+
 ┌─────────────────────────────────────────────────────────────┐
 │  Step 4: User Queries (via CLI)                             │
 └─────────────────────────────────────────────────────────────┘
@@ -588,7 +590,7 @@ CREATE TABLE IF NOT EXISTS products (
   -- Primary keys
   id TEXT PRIMARY KEY NOT NULL,
   handle TEXT UNIQUE NOT NULL,
-  
+
   -- Product data
   title TEXT NOT NULL,
   vendor TEXT,
@@ -597,10 +599,10 @@ CREATE TABLE IF NOT EXISTS products (
   variants TEXT,                -- JSON string
   images TEXT,                  -- JSON string
   description TEXT,
-  
+
   -- Availability
   available_for_sale INTEGER NOT NULL DEFAULT 0,  -- 0 or 1
-  
+
   -- Timestamps
   created_at TEXT NOT NULL,     -- ISO8601
   updated_at TEXT NOT NULL,     -- ISO8601
@@ -610,13 +612,13 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 -- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_products_handle 
+CREATE INDEX IF NOT EXISTS idx_products_handle
   ON products(handle);
 
-CREATE INDEX IF NOT EXISTS idx_products_available 
+CREATE INDEX IF NOT EXISTS idx_products_available
   ON products(available_for_sale);
 
-CREATE INDEX IF NOT EXISTS idx_products_last_seen 
+CREATE INDEX IF NOT EXISTS idx_products_last_seen
   ON products(last_seen_at DESC);
 ```
 
@@ -663,6 +665,7 @@ data/cookies.json (chmod 600)
 ```
 
 **Security measures:**
+
 - Cookies never logged
 - File permissions: 600 (owner read/write only)
 - Not committed to git (.gitignore)
@@ -673,12 +676,12 @@ data/cookies.json (chmod 600)
 ```typescript
 // Rate limiting
 const RATE_LIMIT = {
-  requests: 100,      // Max requests
-  window: 3600000,    // Per hour
+  requests: 100, // Max requests
+  window: 3600000, // Per hour
 };
 
 // Timeout
-const TIMEOUT = 10000;  // 10 seconds
+const TIMEOUT = 10000; // 10 seconds
 
 // Retry with backoff
 const RETRY_CONFIG = {
@@ -700,12 +703,12 @@ const RETRY_CONFIG = {
 
 ### Current Limitations
 
-| Resource | Limit | Reason |
-|----------|-------|--------|
-| **Products** | ~10,000 | SQLite performance |
-| **Poll Frequency** | 30 minutes | Rate limiting |
-| **Concurrent Users** | 1 | Single daemon |
-| **Notifications** | 1/hour/product | WhatsApp spam prevention |
+| Resource             | Limit          | Reason                   |
+| -------------------- | -------------- | ------------------------ |
+| **Products**         | ~10,000        | SQLite performance       |
+| **Poll Frequency**   | 30 minutes     | Rate limiting            |
+| **Concurrent Users** | 1              | Single daemon            |
+| **Notifications**    | 1/hour/product | WhatsApp spam prevention |
 
 ### Scaling Strategies
 

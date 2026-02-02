@@ -21,14 +21,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   // Calculate next poll time (every minute)
   const getNextPollTime = () => {
     if (!lastHeartbeat) return 'N/A';
-    
+
     const nextPoll = lastHeartbeat + 60000; // 1 minute from last poll
     const timeUntil = nextPoll - Date.now();
-    
+
     if (timeUntil <= 0) {
       return 'polling now...';
     }
-    
+
     const seconds = Math.ceil(timeUntil / 1000);
     return `${seconds}s`;
   };
@@ -57,22 +57,29 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
         <Box>
           <Text dimColor>View: </Text>
-          <Text color={theme.colors.accent}>{viewMode === 'list' ? 'List' : 'Detail'}</Text>
+          <Text color={theme.colors.accent}>
+            {viewMode === 'list' ? 'List' : 'Detail'}
+          </Text>
         </Box>
       </Box>
 
       {/* Hotkeys bar */}
-      <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1} justifyContent="space-between">
+      <Box
+        borderStyle="single"
+        borderColor={theme.colors.border}
+        paddingX={1}
+        justifyContent="space-between"
+      >
         <Box>
           <Text color={theme.colors.textDim}>
             <Text color={theme.colors.accent} bold>
               ↑/k
-            </Text>
-            {' '}up{' '}
+            </Text>{' '}
+            up{' '}
             <Text color={theme.colors.accent} bold>
               ↓/j
-            </Text>
-            {' '}down
+            </Text>{' '}
+            down
           </Text>
         </Box>
 
@@ -80,8 +87,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <Text color={theme.colors.textDim}>
             <Text color={theme.colors.accent} bold>
               enter/space
-            </Text>
-            {' '}toggle view
+            </Text>{' '}
+            toggle view
           </Text>
         </Box>
 
@@ -89,8 +96,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <Text color={theme.colors.textDim}>
             <Text color={theme.colors.accent} bold>
               f
-            </Text>
-            {' '}force poll
+            </Text>{' '}
+            force poll
           </Text>
         </Box>
 
@@ -98,8 +105,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <Text color={theme.colors.textDim}>
             <Text color={theme.colors.accent} bold>
               q/esc
-            </Text>
-            {' '}quit
+            </Text>{' '}
+            quit
           </Text>
         </Box>
       </Box>

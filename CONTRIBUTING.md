@@ -142,6 +142,7 @@ npm run format
 ```
 
 **Prettier Configuration** (`.prettierrc`):
+
 ```json
 {
   "singleQuote": true,
@@ -161,6 +162,7 @@ npm run lint
 ```
 
 **Key rules:**
+
 - No unused variables
 - No any types (use unknown or proper types)
 - Explicit return types for public methods
@@ -233,25 +235,25 @@ describe('ShopifyService', () => {
 
 ### Coverage Requirements
 
-| Module Type | Minimum Coverage |
-|-------------|------------------|
-| **Services** | 90% |
-| **Controllers** | 80% |
-| **Utilities** | 95% |
-| **Overall** | 85% |
+| Module Type     | Minimum Coverage |
+| --------------- | ---------------- |
+| **Services**    | 90%              |
+| **Controllers** | 80%              |
+| **Utilities**   | 95%              |
+| **Overall**     | 85%              |
 
 ### Test Naming
 
 ```typescript
 // ✅ Good
-it('should return products when API call succeeds')
-it('should throw ShopifyApiException when API returns 500')
-it('should retry 3 times before failing')
+it('should return products when API call succeeds');
+it('should throw ShopifyApiException when API returns 500');
+it('should retry 3 times before failing');
 
 // ❌ Bad
-it('works')
-it('test1')
-it('handles error')
+it('works');
+it('test1');
+it('handles error');
 ```
 
 ### Mock Data
@@ -287,9 +289,7 @@ describe('Auth (e2e)', () => {
   });
 
   it('/auth (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/auth')
-      .expect(200);
+    return request(app.getHttpServer()).get('/auth').expect(200);
   });
 });
 ```
@@ -303,6 +303,7 @@ describe('Auth (e2e)', () => {
 We use [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
 **Format:**
+
 ```
 <type>(<scope>): <subject>
 
@@ -312,6 +313,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) specificatio
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -345,12 +347,14 @@ Closes #42"
 ### Commit Best Practices
 
 ✅ **Do:**
+
 - Write clear, descriptive commit messages
 - Keep commits focused (one logical change)
 - Reference issues in commit messages
 - Use present tense ("add feature" not "added feature")
 
 ❌ **Don't:**
+
 - Commit commented-out code
 - Commit unrelated changes together
 - Use vague messages ("fix stuff", "update code")
@@ -363,12 +367,14 @@ Closes #42"
 ### Before Submitting
 
 1. **Update your branch:**
+
 ```bash
 git fetch upstream
 git rebase upstream/main
 ```
 
 2. **Run all tests:**
+
 ```bash
 npm test
 npm run test:cov
@@ -376,11 +382,13 @@ npm run lint
 ```
 
 3. **Update documentation:**
+
 - Update README.md if adding features
 - Add JSDoc comments for new functions
 - Update CHANGELOG.md
 
 4. **Test locally:**
+
 ```bash
 npm run build
 npm run start:prod
@@ -389,6 +397,7 @@ npm run start:prod
 ### PR Title
 
 Follow Conventional Commits format:
+
 ```
 feat(module): add new functionality
 fix(service): resolve connection timeout
@@ -398,20 +407,24 @@ fix(service): resolve connection timeout
 
 ```markdown
 ## Description
+
 Brief description of changes
 
 ## Type of Change
+
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] Documentation update
 
 ## How Has This Been Tested?
+
 - [ ] Unit tests
 - [ ] Integration tests
 - [ ] Manual testing
 
 ## Checklist
+
 - [ ] My code follows the project's code style
 - [ ] I have performed a self-review of my code
 - [ ] I have commented my code, particularly in hard-to-understand areas
@@ -422,6 +435,7 @@ Brief description of changes
 - [ ] Any dependent changes have been merged and published
 
 ## Related Issues
+
 Closes #(issue number)
 ```
 
@@ -461,6 +475,7 @@ A clear and concise description of what the bug is.
 
 **To Reproduce**
 Steps to reproduce the behavior:
+
 1. Run command '...'
 2. See error '...'
 
@@ -468,13 +483,16 @@ Steps to reproduce the behavior:
 What you expected to happen.
 
 **Environment:**
+
 - OS: [e.g. macOS 13.0]
 - Node.js version: [e.g. 18.17.0]
 - LumentuiAPI version: [e.g. 1.0.0]
 
 **Logs**
 ```
+
 Paste relevant logs here
+
 ```
 
 **Additional context**
@@ -559,13 +577,11 @@ import { Logger } from 'winston';
 
 @Injectable()
 export class MyService {
-  constructor(
-    @Inject('winston') private readonly logger: Logger,
-  ) {}
+  constructor(@Inject('winston') private readonly logger: Logger) {}
 
   async doSomething() {
     this.logger.info('Starting operation', { context: 'MyService' });
-    
+
     try {
       // Operation
       this.logger.debug('Operation successful', { result });
@@ -599,14 +615,17 @@ const apiUrl = this.configService.get<string>('API_URL');
 ## 🎓 Learning Resources
 
 ### NestJS
+
 - [Official Documentation](https://docs.nestjs.com/)
 - [NestJS Fundamentals Course](https://courses.nestjs.com/)
 
 ### TypeScript
+
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
 - [TypeScript Deep Dive](https://basarat.gitbook.io/typescript/)
 
 ### Testing
+
 - [Jest Documentation](https://jestjs.io/docs/getting-started)
 - [Testing NestJS Applications](https://docs.nestjs.com/fundamentals/testing)
 

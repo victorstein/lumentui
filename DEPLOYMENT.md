@@ -102,6 +102,7 @@ ls -la dist/
 ```
 
 Expected output:
+
 ```
 dist/
 ├── app.controller.js
@@ -182,14 +183,14 @@ ls -la .env.production
 
 ### Required Variables
 
-| Variable | Description | Example | Required |
-|----------|-------------|---------|----------|
-| `NODE_ENV` | Environment name | `production` | ✅ |
-| `DB_PATH` | SQLite database path | `/full/path/to/db` | ✅ |
-| `NOTIFICATION_PHONE` | WhatsApp target (E.164) | `+50586826131` | ✅ |
-| `LUMENTUI_SHOP_URL` | Shopify store URL | `https://shop.lumenalta.com` | ✅ |
-| `LOG_LEVEL` | Logging level | `info` or `warn` | ✅ |
-| `LUMENTUI_POLL_INTERVAL` | Polling interval (seconds) | `1800` (30 min) | ✅ |
+| Variable                 | Description                | Example                      | Required |
+| ------------------------ | -------------------------- | ---------------------------- | -------- |
+| `NODE_ENV`               | Environment name           | `production`                 | ✅       |
+| `DB_PATH`                | SQLite database path       | `/full/path/to/db`           | ✅       |
+| `NOTIFICATION_PHONE`     | WhatsApp target (E.164)    | `+50586826131`               | ✅       |
+| `LUMENTUI_SHOP_URL`      | Shopify store URL          | `https://shop.lumenalta.com` | ✅       |
+| `LOG_LEVEL`              | Logging level              | `info` or `warn`             | ✅       |
+| `LUMENTUI_POLL_INTERVAL` | Polling interval (seconds) | `1800` (30 min)              | ✅       |
 
 ---
 
@@ -209,37 +210,37 @@ module.exports = {
       cwd: '/home/clawdbot/production/lumentui-prod',
       instances: 1,
       exec_mode: 'fork',
-      
+
       // Environment
       env_production: {
         NODE_ENV: 'production',
       },
       env_file: '.env.production',
-      
+
       // Logging
       error_file: './data/logs/pm2-error.log',
       out_file: './data/logs/pm2-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
-      
+
       // Restart strategy
       autorestart: true,
       max_restarts: 10,
       min_uptime: '10s',
       restart_delay: 5000,
-      
+
       // Resource limits
       max_memory_restart: '300M',
-      
+
       // Graceful shutdown
       kill_timeout: 5000,
       wait_ready: true,
       listen_timeout: 10000,
-      
+
       // Watch (disabled in production)
       watch: false,
       ignore_watch: ['node_modules', 'data', 'logs', '.git'],
-      
+
       // Advanced
       source_map_support: true,
       instance_var: 'INSTANCE_ID',
@@ -359,11 +360,11 @@ Currently no migration system. Future schema changes will require manual migrati
 
 ### Log Files
 
-| Log File | Description | Rotation |
-|----------|-------------|----------|
-| `data/logs/app.log` | Application logs (Winston) | Daily, 14 days |
-| `data/logs/pm2-out.log` | PM2 stdout | Manual |
-| `data/logs/pm2-error.log` | PM2 stderr | Manual |
+| Log File                  | Description                | Rotation       |
+| ------------------------- | -------------------------- | -------------- |
+| `data/logs/app.log`       | Application logs (Winston) | Daily, 14 days |
+| `data/logs/pm2-out.log`   | PM2 stdout                 | Manual         |
+| `data/logs/pm2-error.log` | PM2 stderr                 | Manual         |
 
 ### Log Rotation
 
@@ -667,21 +668,25 @@ pm2 logs lumentui-api
 **Solutions:**
 
 1. Check PM2 error logs:
+
    ```bash
    pm2 logs lumentui-api --err --lines 50
    ```
 
 2. Check environment variables:
+
    ```bash
    pm2 env lumentui-api
    ```
 
 3. Verify database path exists:
+
    ```bash
    ls -la data/lumentui.db
    ```
 
 4. Check file permissions:
+
    ```bash
    ls -la .env.production
    ls -la data/
@@ -699,11 +704,13 @@ pm2 logs lumentui-api
 **Solutions:**
 
 1. Check for memory leaks:
+
    ```bash
    pm2 monit
    ```
 
 2. Reduce polling frequency:
+
    ```bash
    # In .env.production
    LUMENTUI_POLL_INTERVAL=3600  # 1 hour instead of 30 min
@@ -721,18 +728,21 @@ pm2 logs lumentui-api
 **Solutions:**
 
 1. Check for multiple instances:
+
    ```bash
    pm2 list
    ps aux | grep lumentui
    ```
 
 2. Stop all instances:
+
    ```bash
    pm2 delete all
    killall node
    ```
 
 3. Remove lock files:
+
    ```bash
    rm data/lumentui.db-wal
    rm data/lumentui.db-shm
@@ -750,17 +760,20 @@ pm2 logs lumentui-api
 **Solutions:**
 
 1. Verify Clawdbot is running:
+
    ```bash
    clawdbot gateway status
    ```
 
 2. Check phone number format (must be E.164):
+
    ```bash
    grep NOTIFICATION_PHONE .env.production
    # Should be: +50586826131 (with country code)
    ```
 
 3. Test notification manually:
+
    ```bash
    message --action=send --channel=whatsapp --target=+50586826131 --message="Test"
    ```
@@ -777,11 +790,13 @@ pm2 logs lumentui-api
 **Solutions:**
 
 1. Re-authenticate:
+
    ```bash
    node dist/cli.js auth
    ```
 
 2. Check cookie file:
+
    ```bash
    cat data/cookies.json
    ```

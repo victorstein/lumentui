@@ -21,7 +21,12 @@ export const ProductList: React.FC<ProductListProps> = ({
 }) => {
   if (products.length === 0) {
     return (
-      <Box flexDirection="column" borderStyle="single" borderColor={theme.colors.border} padding={1}>
+      <Box
+        flexDirection="column"
+        borderStyle="single"
+        borderColor={theme.colors.border}
+        padding={1}
+      >
         <Text color={theme.colors.textMuted}>No products found.</Text>
         <Text dimColor>The daemon might still be fetching products...</Text>
       </Box>
@@ -31,7 +36,7 @@ export const ProductList: React.FC<ProductListProps> = ({
   // Format price
   const formatPrice = (variants: Product['variants']) => {
     if (variants.length === 0) return 'N/A';
-    
+
     const prices = variants.map((v) => parseFloat(v.price));
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
@@ -46,14 +51,26 @@ export const ProductList: React.FC<ProductListProps> = ({
   // Get availability status
   const getAvailabilityIndicator = (product: Product) => {
     if (product.available) {
-      return <Text color={theme.colors.available}>{theme.symbols.check} Available</Text>;
+      return (
+        <Text color={theme.colors.available}>
+          {theme.symbols.check} Available
+        </Text>
+      );
     } else {
-      return <Text color={theme.colors.unavailable}>{theme.symbols.cross} Sold Out</Text>;
+      return (
+        <Text color={theme.colors.unavailable}>
+          {theme.symbols.cross} Sold Out
+        </Text>
+      );
     }
   };
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={theme.colors.border}>
+    <Box
+      flexDirection="column"
+      borderStyle="single"
+      borderColor={theme.colors.border}
+    >
       {/* Header */}
       <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1}>
         <Box width="60%">
@@ -79,25 +96,35 @@ export const ProductList: React.FC<ProductListProps> = ({
           const isSelected = index === selectedIndex;
 
           return (
-            <Box key={product.id} marginBottom={index < products.length - 1 ? 1 : 0}>
-              <Box
-                width="100%"
-                paddingX={1}
-              >
+            <Box
+              key={product.id}
+              marginBottom={index < products.length - 1 ? 1 : 0}
+            >
+              <Box width="100%" paddingX={1}>
                 {isSelected && (
                   <Text color={theme.colors.accent} bold>
                     {theme.symbols.arrow}{' '}
                   </Text>
                 )}
-                
+
                 <Box width="60%">
-                  <Text color={isSelected ? theme.colors.text : theme.colors.textDim} bold={isSelected}>
+                  <Text
+                    color={
+                      isSelected ? theme.colors.text : theme.colors.textDim
+                    }
+                    bold={isSelected}
+                  >
                     {product.title}
                   </Text>
                 </Box>
 
                 <Box width="20%">
-                  <Text color={isSelected ? theme.colors.text : theme.colors.textDim} bold={isSelected}>
+                  <Text
+                    color={
+                      isSelected ? theme.colors.text : theme.colors.textDim
+                    }
+                    bold={isSelected}
+                  >
                     {formatPrice(product.variants)}
                   </Text>
                 </Box>
@@ -110,7 +137,12 @@ export const ProductList: React.FC<ProductListProps> = ({
       </Box>
 
       {/* Footer stats */}
-      <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1} justifyContent="space-between">
+      <Box
+        borderStyle="single"
+        borderColor={theme.colors.border}
+        paddingX={1}
+        justifyContent="space-between"
+      >
         <Text dimColor>
           Showing {products.length} of {totalProducts} products
         </Text>

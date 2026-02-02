@@ -87,7 +87,9 @@ const App: React.FC = () => {
       <Header connected={connected} lastHeartbeat={lastHeartbeat} />
 
       {/* New product notification banner */}
-      {newProductNotification && <NotificationBanner product={newProductNotification} />}
+      {newProductNotification && (
+        <NotificationBanner product={newProductNotification} />
+      )}
 
       {/* Error banner */}
       {error && (

@@ -22,7 +22,10 @@ class CliValidator {
    * @param phone Phone number string
    * @returns true if valid, error message if invalid
    */
-  static validatePhoneNumber(phone: string): { valid: boolean; error?: string } {
+  static validatePhoneNumber(phone: string): {
+    valid: boolean;
+    error?: string;
+  } {
     if (!phone) {
       return { valid: true }; // Optional field
     }
@@ -30,7 +33,8 @@ class CliValidator {
     if (!phone.startsWith('+')) {
       return {
         valid: false,
-        error: 'Phone number must start with + (E.164 format, e.g., +50586826131)',
+        error:
+          'Phone number must start with + (E.164 format, e.g., +50586826131)',
       };
     }
 
@@ -278,13 +282,15 @@ program
       // Validate environment configuration
       console.log('🔍 Validating configuration...');
       const validationResult = CliValidator.validateEnvironment();
-      
+
       if (!validationResult.valid) {
         console.error('❌ Configuration validation failed:\n');
         validationResult.errors.forEach((error) => {
           console.error(`  • ${error}`);
         });
-        console.error('\nPlease fix the above errors in your .env file and try again.');
+        console.error(
+          '\nPlease fix the above errors in your .env file and try again.',
+        );
         process.exit(1);
       }
 
@@ -364,7 +370,7 @@ program
           const React = await import('react');
           // @ts-ignore - Dynamic import of built TUI
           const App = await import('./ui/App.js');
-          
+
           // Render the TUI
           render(React.createElement(App.default));
         } catch (tuiError: any) {
@@ -451,7 +457,9 @@ program
 
         // Check IPC connection
         const ipcReachable = await IpcClient.isDaemonReachable();
-        console.log(`IPC: ${ipcReachable ? '🟢 Connected' : '🔴 Not responding'}`);
+        console.log(
+          `IPC: ${ipcReachable ? '🟢 Connected' : '🔴 Not responding'}`,
+        );
 
         // Get poll information
         try {
@@ -469,7 +477,9 @@ program
             const uptimeStr = formatDuration(uptime);
 
             console.log(`\nLast Poll: ${lastPollDate.toLocaleString()}`);
-            console.log(`Status: ${lastPoll.success ? '✅ Success' : '❌ Failed'}`);
+            console.log(
+              `Status: ${lastPoll.success ? '✅ Success' : '❌ Failed'}`,
+            );
             console.log(`Products: ${lastPoll.product_count}`);
             console.log(`New Products: ${lastPoll.new_products}`);
             console.log(`Duration: ${lastPoll.duration_ms}ms`);
@@ -561,11 +571,16 @@ program
               });
 
               stream.on('data', (chunk) => {
-                const newLines = chunk.toString().split('\n').filter((l) => l.trim());
+                const newLines = chunk
+                  .toString()
+                  .split('\n')
+                  .filter((l) => l.trim());
                 newLines.forEach((line) => {
                   try {
                     const logEntry = JSON.parse(line);
-                    const timestamp = new Date(logEntry.timestamp).toLocaleTimeString();
+                    const timestamp = new Date(
+                      logEntry.timestamp,
+                    ).toLocaleTimeString();
                     const level = logEntry.level.toUpperCase().padEnd(5);
                     const message = logEntry.message;
                     console.log(`[${timestamp}] ${level} ${message}`);
@@ -589,6 +604,339 @@ program
       }
     } catch (error) {
       console.error('❌ Failed to read logs:', error.message);
+      process.exit(1);
+    }
+  });
+
+/**
+ * Command: lumentui config
+ * Manage configuration settings
+ */
+const configCommand = program
+  .command('config')
+  .description('Manage configuration settings');
+
+/**
+ * Config utilities
+ */
+class ConfigManager {
+  private static readonly ENV_FILE = path.join(process.cwd(), '.env');
+
+  // Known configuration keys with validation rules
+  private static readonly CONFIG_SCHEMA: Record<
+    string,
+    {
+      description: string;
+      validator?: (value: string) => { valid: boolean; error?: string };
+      sensitive?: boolean;
+    }
+  > = {
+    LUMENTUI_NOTIFICATION_PHONE: {
+      description: 'WhatsApp notification phone number (E.164 format)',
+      validator: (value) => CliValidator.validatePhoneNumber(value),
+      sensitive: true,
+    },
+    LUMENTUI_POLL_INTERVAL: {
+      description: 'Polling interval in seconds',
+      validator: (value) =>
+        CliValidator.validateNumeric(
+          value,
+          'LUMENTUI_POLL_INTERVAL',
+          10,
+          86400,
+        ),
+    },
+    LUMENTUI_NOTIFY_MIN_PRICE: {
+      description: 'Minimum price for notifications',
+      validator: (value) =>
+        CliValidator.validateNumeric(value, 'LUMENTUI_NOTIFY_MIN_PRICE', 0),
+    },
+    LUMENTUI_NOTIFY_KEYWORDS: {
+      description: 'Comma-separated keywords for filtering notifications',
+    },
+    LUMENTUI_SHOP_URL: {
+      description: 'Shopify shop URL',
+    },
+    NOTIFICATION_PHONE: {
+      description: 'WhatsApp notification phone number (E.164 format)',
+      validator: (value) => CliValidator.validatePhoneNumber(value),
+      sensitive: true,
+    },
+    SHOPIFY_TIMEOUT_MS: {
+      description: 'API timeout in milliseconds',
+      validator: (value) =>
+        CliValidator.validateNumeric(value, 'SHOPIFY_TIMEOUT_MS', 1000, 60000),
+    },
+    LOG_LEVEL: {
+      description: 'Log level (debug|info|warn|error)',
+      validator: (value) => {
+        const valid = ['debug', 'info', 'warn', 'error'].includes(value);
+        return valid
+          ? { valid: true }
+          : { valid: false, error: 'Must be one of: debug, info, warn, error' };
+      },
+    },
+    NOTIFICATION_ENABLED: {
+      description: 'Enable/disable notifications',
+      validator: (value) => {
+        const valid = ['true', 'false'].includes(value.toLowerCase());
+        return valid
+          ? { valid: true }
+          : { valid: false, error: 'Must be true or false' };
+      },
+    },
+  };
+
+  /**
+   * Read .env file and parse into key-value pairs
+   */
+  static readEnvFile(): Record<string, string> {
+    if (!fs.existsSync(this.ENV_FILE)) {
+      return {};
+    }
+
+    const content = fs.readFileSync(this.ENV_FILE, 'utf-8');
+    const config: Record<string, string> = {};
+
+    content.split('\n').forEach((line) => {
+      const trimmedLine = line.trim();
+
+      // Skip empty lines and comments
+      if (!trimmedLine || trimmedLine.startsWith('#')) {
+        return;
+      }
+
+      // Parse KEY=VALUE
+      const match = trimmedLine.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        const value = match[2].trim();
+        config[key] = value;
+      }
+    });
+
+    return config;
+  }
+
+  /**
+   * Write configuration back to .env file
+   */
+  static writeEnvFile(config: Record<string, string>): void {
+    // Preserve original file structure with comments
+    let content = '';
+
+    if (fs.existsSync(this.ENV_FILE)) {
+      const originalContent = fs.readFileSync(this.ENV_FILE, 'utf-8');
+      const lines = originalContent.split('\n');
+      const updatedKeys = new Set<string>();
+
+      lines.forEach((line) => {
+        const trimmedLine = line.trim();
+
+        // Keep comments and empty lines
+        if (!trimmedLine || trimmedLine.startsWith('#')) {
+          content += line + '\n';
+          return;
+        }
+
+        // Update existing keys
+        const match = trimmedLine.match(/^([^=]+)=/);
+        if (match) {
+          const key = match[1].trim();
+          if (key in config) {
+            content += `${key}=${config[key]}\n`;
+            updatedKeys.add(key);
+            return;
+          }
+        }
+
+        // Keep unmodified line
+        content += line + '\n';
+      });
+
+      // Append new keys that weren't in the original file
+      Object.keys(config).forEach((key) => {
+        if (!updatedKeys.has(key)) {
+          content += `${key}=${config[key]}\n`;
+        }
+      });
+    } else {
+      // Create new .env file
+      Object.entries(config).forEach(([key, value]) => {
+        content += `${key}=${value}\n`;
+      });
+    }
+
+    fs.writeFileSync(this.ENV_FILE, content, 'utf-8');
+  }
+
+  /**
+   * Mask sensitive values
+   */
+  static maskValue(key: string, value: string): string {
+    const schema = this.CONFIG_SCHEMA[key];
+    if (schema?.sensitive && value) {
+      if (value.length <= 4) {
+        return '****';
+      }
+      return '*'.repeat(value.length - 4) + value.slice(-4);
+    }
+    return value;
+  }
+
+  /**
+   * Validate a configuration value
+   */
+  static validateValue(
+    key: string,
+    value: string,
+  ): { valid: boolean; error?: string } {
+    const schema = this.CONFIG_SCHEMA[key];
+
+    if (!schema) {
+      return {
+        valid: false,
+        error: `Unknown configuration key: ${key}`,
+      };
+    }
+
+    if (schema.validator) {
+      return schema.validator(value);
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Get configuration key description
+   */
+  static getDescription(key: string): string {
+    return this.CONFIG_SCHEMA[key]?.description || 'No description available';
+  }
+
+  /**
+   * Check if key is known
+   */
+  static isKnownKey(key: string): boolean {
+    return key in this.CONFIG_SCHEMA;
+  }
+}
+
+/**
+ * Subcommand: lumentui config get
+ * Display current configuration values
+ */
+configCommand
+  .command('get')
+  .description('Display current configuration values')
+  .option('-a, --all', 'Show all configuration values (including non-standard)')
+  .action((options) => {
+    try {
+      const config = ConfigManager.readEnvFile();
+
+      if (Object.keys(config).length === 0) {
+        console.log(
+          'No configuration found. Create a .env file to get started.',
+        );
+        console.log('See .env.example for reference.');
+        process.exit(0);
+      }
+
+      console.log('\n Configuration Settings\n');
+      console.log(''.padEnd(80, '='));
+
+      // Show key configuration values
+      const keysToShow = options.all
+        ? Object.keys(config)
+        : Object.keys(config).filter((key) => ConfigManager.isKnownKey(key));
+
+      if (keysToShow.length === 0) {
+        console.log('\nNo standard configuration keys found.');
+        console.log('Use --all flag to see all keys.');
+      } else {
+        keysToShow.sort().forEach((key) => {
+          const value = config[key];
+          const maskedValue = ConfigManager.maskValue(key, value);
+          const description = ConfigManager.getDescription(key);
+
+          console.log(`\n${key}`);
+          console.log(`  Value: ${maskedValue || '(not set)'}`);
+          console.log(`  Description: ${description}`);
+        });
+      }
+
+      console.log('\n' + ''.padEnd(80, '=') + '\n');
+      process.exit(0);
+    } catch (error) {
+      console.error('Failed to read configuration:', error.message);
+      process.exit(1);
+    }
+  });
+
+/**
+ * Subcommand: lumentui config set KEY=VALUE
+ * Update configuration value
+ */
+configCommand
+  .command('set <keyValue>')
+  .description('Set configuration value (format: KEY=VALUE)')
+  .action((keyValue: string) => {
+    try {
+      // Parse KEY=VALUE
+      const match = keyValue.match(/^([^=]+)=(.*)$/);
+      if (!match) {
+        console.error('Invalid format. Use: lumentui config set KEY=VALUE');
+        console.error('Example: lumentui config set LUMENTUI_POLL_INTERVAL=60');
+        process.exit(1);
+      }
+
+      const key = match[1].trim();
+      const value = match[2].trim();
+
+      // Validate key
+      if (!ConfigManager.isKnownKey(key)) {
+        console.error(`Unknown configuration key: ${key}`);
+        console.error('\nKnown keys:');
+        Object.keys(ConfigManager['CONFIG_SCHEMA'])
+          .sort()
+          .forEach((k) => {
+            console.error(`  - ${k}`);
+          });
+        process.exit(1);
+      }
+
+      // Validate value
+      const validation = ConfigManager.validateValue(key, value);
+      if (!validation.valid) {
+        console.error(`Validation failed: ${validation.error}`);
+        process.exit(1);
+      }
+
+      // Read current config
+      const config = ConfigManager.readEnvFile();
+
+      // Update the key
+      const isNewKey = !(key in config);
+      config[key] = value;
+
+      // Write back to file
+      ConfigManager.writeEnvFile(config);
+
+      // Success message
+      if (isNewKey) {
+        console.log(`Configuration key added: ${key}`);
+      } else {
+        console.log(`Configuration updated: ${key}`);
+      }
+
+      const maskedValue = ConfigManager.maskValue(key, value);
+      console.log(`New value: ${maskedValue}`);
+      console.log('\nRestart the daemon for changes to take effect:');
+      console.log('  lumentui stop && lumentui start');
+
+      process.exit(0);
+    } catch (error) {
+      console.error('Failed to update configuration:', error.message);
       process.exit(1);
     }
   });

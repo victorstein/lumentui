@@ -13,7 +13,12 @@ interface ProductDetailProps {
 export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
   if (!product) {
     return (
-      <Box flexDirection="column" borderStyle="single" borderColor={theme.colors.border} padding={1}>
+      <Box
+        flexDirection="column"
+        borderStyle="single"
+        borderColor={theme.colors.border}
+        padding={1}
+      >
         <Text color={theme.colors.textMuted}>No product selected.</Text>
       </Box>
     );
@@ -25,7 +30,12 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
   };
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={theme.colors.border} padding={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="single"
+      borderColor={theme.colors.border}
+      padding={1}
+    >
       {/* Title */}
       <Box marginBottom={1}>
         <Text bold color={theme.colors.primary}>
@@ -87,9 +97,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
             Tags:
           </Text>
           <Box marginLeft={2}>
-            <Text color={theme.colors.textDim}>
-              {product.tags.join(', ')}
-            </Text>
+            <Text color={theme.colors.textDim}>{product.tags.join(', ')}</Text>
           </Box>
         </Box>
       )}
@@ -115,7 +123,13 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
       )}
 
       {/* Timestamps */}
-      <Box flexDirection="column" marginTop={1} borderColor={theme.colors.border} borderStyle="single" paddingX={1}>
+      <Box
+        flexDirection="column"
+        marginTop={1}
+        borderColor={theme.colors.border}
+        borderStyle="single"
+        paddingX={1}
+      >
         <Box>
           <Text dimColor>Created: </Text>
           <Text>{formatDate(product.createdAt)}</Text>

@@ -112,7 +112,10 @@ export class AuthService {
         .map((c) => `${c.name}=${c.value}`)
         .join('; ');
 
-      this.logger.log('Cookies loaded and validated successfully', 'AuthService');
+      this.logger.log(
+        'Cookies loaded and validated successfully',
+        'AuthService',
+      );
       return cookieHeader;
     } catch (error) {
       if (error instanceof AuthException) {
@@ -134,7 +137,7 @@ export class AuthService {
     if (!cookie.expires || cookie.expires === 0) {
       return false;
     }
-    
+
     // expires is in seconds since epoch, compare with current time
     const nowInSeconds = Math.floor(Date.now() / 1000);
     return cookie.expires < nowInSeconds;

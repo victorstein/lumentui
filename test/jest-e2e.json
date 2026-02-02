@@ -3,12 +3,14 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "maxWorkers": 1,
+  "testTimeout": 60000,
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  },
-  "globals": {
-    "ts-jest": {
-      "tsconfig": "tsconfig.e2e.json"
-    }
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": "tsconfig.e2e.json"
+      }
+    ]
   }
 }

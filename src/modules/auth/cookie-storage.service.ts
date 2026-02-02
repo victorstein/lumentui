@@ -108,7 +108,7 @@ export class CookieStorageService {
 
       // Check if this is the new format (v2) or old format (v1)
       const parsed = JSON.parse(decrypted);
-      
+
       if (parsed.version === this.STORAGE_VERSION) {
         // New format with full Cookie objects
         return parsed.cookies as Cookie[];
@@ -133,7 +133,7 @@ export class CookieStorageService {
     if (!cookies || cookies.length === 0) {
       return null;
     }
-    
+
     return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
   }
 }

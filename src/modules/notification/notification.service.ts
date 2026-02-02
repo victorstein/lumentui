@@ -240,8 +240,7 @@ export class NotificationService implements OnModuleInit {
       const db = this.databaseService.getDatabase();
 
       // Calculate timestamp threshold (current time - rate limit window)
-      const rateLimitThreshold =
-        Date.now() - RATE_LIMIT_MINUTES * 60 * 1000;
+      const rateLimitThreshold = Date.now() - RATE_LIMIT_MINUTES * 60 * 1000;
 
       // Get last successful notification for each product within rate limit window
       const recentNotifications = db
@@ -274,6 +273,65 @@ export class NotificationService implements OnModuleInit {
         'NotificationService',
       );
     }
+  }
+
+  /**
+   * Check if a product should be notified based on filters
+   * (minimum price, keywords, etc.)
+   */
+  shouldNotify(product: ProductDto): boolean {
+    const minPriceStr = this.configService.get<string>(
+      'LUMENTUI_NOTIFY_MIN_PRICE',
+    );
+    const keywordsStr = this.configService.get<string>(
+      'LUMENTUI_NOTIFY_KEYWORDS',
+    );
+
+    // Check minimum price filter
+    if (minPriceStr) {
+      const minPrice = parseFloat(minPriceStr);
+      if (!isNaN(minPrice) && minPrice > 0) {
+        // Check product price and variant prices
+        const productMeetsPrice = product.price >= minPrice;
+        const hasExpensiveVariant = product.variants.some(
+          (v) => v.price >= minPrice,
+        );
+
+        if (!productMeetsPrice && !hasExpensiveVariant) {
+          this.logger.log(
+            `Product ${product.id} filtered out: price ${product.price} and all variants below minimum ${minPrice}`,
+            'NotificationService',
+          );
+          return false;
+        }
+      }
+    }
+
+    // Check keywords filter
+    if (keywordsStr && keywordsStr.trim()) {
+      const keywordList = keywordsStr
+        .split(',')
+        .map((k) => k.trim().toLowerCase())
+        .filter((k) => k.length > 0);
+
+      if (keywordList.length > 0) {
+        const titleLower = product.title.toLowerCase();
+        const hasKeyword = keywordList.some((keyword) =>
+          titleLower.includes(keyword),
+        );
+
+        if (!hasKeyword) {
+          this.logger.log(
+            `Product ${product.id} filtered out: title does not contain any of [${keywordList.join(', ')}]`,
+            'NotificationService',
+          );
+          return false;
+        }
+      }
+    }
+
+    // If neither filter is set, or all checks pass, notify
+    return true;
   }
 
   /**

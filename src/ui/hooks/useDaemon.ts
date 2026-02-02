@@ -113,28 +113,34 @@ export const useDaemon = () => {
       );
 
       // New product event
-      client.on('product:new', (data: { product: Product; timestamp: number }) => {
-        setState((prev) => ({
-          ...prev,
-          newProductNotification: data.product,
-        }));
-
-        // Clear notification after 5 seconds
-        setTimeout(() => {
+      client.on(
+        'product:new',
+        (data: { product: Product; timestamp: number }) => {
           setState((prev) => ({
             ...prev,
-            newProductNotification: null,
+            newProductNotification: data.product,
           }));
-        }, 5000);
-      });
+
+          // Clear notification after 5 seconds
+          setTimeout(() => {
+            setState((prev) => ({
+              ...prev,
+              newProductNotification: null,
+            }));
+          }, 5000);
+        },
+      );
 
       // Error event
-      client.on('daemon:error', (data: { error: string; timestamp: number }) => {
-        setState((prev) => ({
-          ...prev,
-          error: data.error,
-        }));
-      });
+      client.on(
+        'daemon:error',
+        (data: { error: string; timestamp: number }) => {
+          setState((prev) => ({
+            ...prev,
+            error: data.error,
+          }));
+        },
+      );
 
       // Log event
       client.on('log', (data: LogEntry) => {

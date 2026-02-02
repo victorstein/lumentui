@@ -58,9 +58,12 @@ export const useProducts = (products: Product[]) => {
     if (filteredProducts.length === 0) {
       return null;
     }
-    
+
     // Clamp index to valid range
-    const clampedIndex = Math.max(0, Math.min(selectedIndex, filteredProducts.length - 1));
+    const clampedIndex = Math.max(
+      0,
+      Math.min(selectedIndex, filteredProducts.length - 1),
+    );
     return filteredProducts[clampedIndex];
   }, [filteredProducts, selectedIndex]);
 
@@ -87,9 +90,14 @@ export const useProducts = (products: Product[]) => {
   /**
    * Select product by index
    */
-  const selectByIndex = useCallback((index: number) => {
-    setSelectedIndex(Math.max(0, Math.min(index, filteredProducts.length - 1)));
-  }, [filteredProducts.length]);
+  const selectByIndex = useCallback(
+    (index: number) => {
+      setSelectedIndex(
+        Math.max(0, Math.min(index, filteredProducts.length - 1)),
+      );
+    },
+    [filteredProducts.length],
+  );
 
   /**
    * Toggle between list and detail view
@@ -113,7 +121,7 @@ export const useProducts = (products: Product[]) => {
       ...prev,
       ...updates,
     }));
-    
+
     // Reset selection when filters change
     setSelectedIndex(0);
   }, []);
@@ -143,7 +151,8 @@ export const useProducts = (products: Product[]) => {
       available,
       unavailable,
       filtered,
-      isFiltered: filters.availableOnly || filters.searchQuery.trim().length > 0,
+      isFiltered:
+        filters.availableOnly || filters.searchQuery.trim().length > 0,
     };
   }, [products, filteredProducts, filters]);
 

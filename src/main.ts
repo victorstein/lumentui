@@ -22,10 +22,7 @@ async function bootstrap() {
   // Log IPC status
   const ipcGateway = app.get(IpcGateway);
   const ipcStatus = ipcGateway.getStatus();
-  logger.log(
-    `IPC server listening at ${ipcStatus.socketPath}`,
-    'Bootstrap',
-  );
+  logger.log(`IPC server listening at ${ipcStatus.socketPath}`, 'Bootstrap');
 
   // Handle graceful shutdown
   const shutdown = async (signal: string) => {

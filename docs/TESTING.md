@@ -9,12 +9,12 @@
 
 ### Global Coverage
 
-| Metric | Coverage | Target | Status |
-|--------|----------|--------|--------|
-| **Statements** | 29.72% | >80% | ⚠️ Below Target |
-| **Branches** | 27.79% | >75% | ⚠️ Below Target |
-| **Functions** | 43.57% | >80% | ⚠️ Below Target |
-| **Lines** | 54.18% | >80% | ⚠️ Below Target |
+| Metric         | Coverage | Target | Status          |
+| -------------- | -------- | ------ | --------------- |
+| **Statements** | 29.72%   | >80%   | ⚠️ Below Target |
+| **Branches**   | 27.79%   | >75%   | ⚠️ Below Target |
+| **Functions**  | 43.57%   | >80%   | ⚠️ Below Target |
+| **Lines**      | 54.18%   | >80%   | ⚠️ Below Target |
 
 **Note:** Low global coverage expected at this phase due to untested infrastructure files (cli.ts, main.ts, modules). Core business logic modules have >80% coverage.
 
@@ -22,25 +22,25 @@
 
 #### ✅ Well-Tested Modules (>80%)
 
-| Module | Statements | Branches | Functions | Lines |
-|--------|------------|----------|-----------|-------|
-| **AppController** | 100% | 75% | 100% | 100% |
-| **AppService** | 100% | 100% | 100% | 100% |
-| **ShopifyService** | 85.71% | 69.44% | 50% | 85% |
-| **AuthService** | 91.04% | 71.87% | 100% | 90.32% |
-| **DatabaseService** | 98.24% | 80% | 100% | 98.18% |
-| **SchedulerService** | 93.54% | 82.5% | 77.77% | 93.22% |
-| **NotificationService** | 100% | 87.17% | 100% | 100% |
+| Module                  | Statements | Branches | Functions | Lines  |
+| ----------------------- | ---------- | -------- | --------- | ------ |
+| **AppController**       | 100%       | 75%      | 100%      | 100%   |
+| **AppService**          | 100%       | 100%     | 100%      | 100%   |
+| **ShopifyService**      | 85.71%     | 69.44%   | 50%       | 85%    |
+| **AuthService**         | 91.04%     | 71.87%   | 100%      | 90.32% |
+| **DatabaseService**     | 98.24%     | 80%      | 100%      | 98.18% |
+| **SchedulerService**    | 93.54%     | 82.5%    | 77.77%    | 93.22% |
+| **NotificationService** | 100%       | 87.17%   | 100%      | 100%   |
 
 #### ⚠️ Low Coverage Modules (<50%)
 
-| Module | Coverage | Reason |
-|--------|----------|--------|
-| **cli.ts** | 0% | CLI entry point - needs manual testing |
-| **main.ts** | 0% | Bootstrap - tested via integration tests |
-| **LoggerService** | 33.33% | Infrastructure - partially tested |
-| **CookieStorageService** | 25.64% | Crypto operations - complex mocking |
-| **Various .module.ts** | 0% | NestJS modules - tested via DI |
+| Module                   | Coverage | Reason                                   |
+| ------------------------ | -------- | ---------------------------------------- |
+| **cli.ts**               | 0%       | CLI entry point - needs manual testing   |
+| **main.ts**              | 0%       | Bootstrap - tested via integration tests |
+| **LoggerService**        | 33.33%   | Infrastructure - partially tested        |
+| **CookieStorageService** | 25.64%   | Crypto operations - complex mocking      |
+| **Various .module.ts**   | 0%       | NestJS modules - tested via DI           |
 
 ---
 
@@ -56,6 +56,7 @@ npm run test
 ```
 
 **Test Files:**
+
 - `src/app.controller.spec.ts` (3 tests)
 - `src/modules/auth/auth.service.spec.ts` (9 tests)
 - `src/modules/api/shopify/shopify.service.spec.ts` (14 tests)
@@ -76,9 +77,11 @@ npm run test:e2e
 ```
 
 **Test File:**
+
 - `test/integration/app.e2e-spec.ts`
 
 **Coverage:**
+
 - ✅ Complete flow: Poll → Scrape → Save
 - ✅ Multiple products handling
 - ✅ Product change detection
@@ -118,12 +121,12 @@ npm run lint
 
 #### Issues Breakdown
 
-| Category | Count | Severity |
-|----------|-------|----------|
-| Unsafe `any` type operations | 77 | Error |
-| Unused variables | 3 | Error |
-| Missing await expressions | 3 | Error |
-| Other TypeScript strict rules | 17 | Warning |
+| Category                      | Count | Severity |
+| ----------------------------- | ----- | -------- |
+| Unsafe `any` type operations  | 77    | Error    |
+| Unused variables              | 3     | Error    |
+| Missing await expressions     | 3     | Error    |
+| Other TypeScript strict rules | 17    | Warning  |
 
 #### Critical Issues (Must Fix)
 
@@ -139,6 +142,7 @@ npm run lint
 #### Non-Critical Issues (Can Defer)
 
 **Type Safety** (77 errors):
+
 - Most are `@typescript-eslint/no-unsafe-*` rules
 - Common in test files using mocks (`as any`)
 - Would require extensive refactoring of test mocks
@@ -169,6 +173,7 @@ npm run lint
 ### Recommendations
 
 1. **Extract constants:**
+
    ```typescript
    // config/constants.ts
    export const NOTIFICATION_RATE_LIMIT_MINUTES = 60;
@@ -296,14 +301,14 @@ npm run test -- --testNamePattern="DatabaseService"
 
 ## ✅ Phase 7 Completion Criteria
 
-| Criterion | Status | Notes |
-|-----------|--------|-------|
-| Integration tests created | ✅ | 14/16 passing, 2 skipped |
-| Manual testing documented | ✅ | See MANUAL_TEST_RESULTS.md |
-| Coverage >80% global | ⚠️ | 29.72% (modules >80%) |
-| Lint clean | ❌ | 100 issues (77 type-safety) |
-| Build successful | ✅ | Zero TS errors |
-| All tests passing | ✅ | 76 unit + 14 integration |
+| Criterion                 | Status | Notes                       |
+| ------------------------- | ------ | --------------------------- |
+| Integration tests created | ✅     | 14/16 passing, 2 skipped    |
+| Manual testing documented | ✅     | See MANUAL_TEST_RESULTS.md  |
+| Coverage >80% global      | ⚠️     | 29.72% (modules >80%)       |
+| Lint clean                | ❌     | 100 issues (77 type-safety) |
+| Build successful          | ✅     | Zero TS errors              |
+| All tests passing         | ✅     | 76 unit + 14 integration    |
 
 **Overall Status:** ✅ **PHASE 7 COMPLETE**
 
@@ -316,6 +321,7 @@ While global coverage and lint are below target, all critical functionality is t
 ## 📞 Support
 
 For test failures or coverage questions:
+
 - Check test logs: `npm run test -- --verbose`
 - Review this document's troubleshooting section
 - Consult `test/MANUAL_TEST_RESULTS.md` for integration test details

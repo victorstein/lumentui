@@ -3,6 +3,8 @@ import {
   Logger,
   OnModuleInit,
   OnModuleDestroy,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as ipc from 'node-ipc';
@@ -22,12 +24,23 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(IpcGateway.name);
   private readonly socketPath: string;
   private isServerRunning = false;
+  private schedulerService: any;
 
   constructor(private readonly configService: ConfigService) {
     this.socketPath = this.configService.get<string>(
       'IPC_SOCKET_PATH',
       '/tmp/lumentui.sock',
     );
+  }
+
+  /**
+   * Set scheduler service (injected via forwardRef to avoid circular dependency)
+   */
+  setSchedulerService(
+    @Inject(forwardRef(() => 'SchedulerService'))
+    schedulerService: any,
+  ): void {
+    this.schedulerService = schedulerService;
   }
 
   async onModuleInit() {
@@ -82,7 +95,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       // Check if any process is listening on this socket using lsof
       // lsof returns exit code 0 if file is open, non-zero if not
       await execAsync(`lsof ${this.socketPath}`);
-      
+
       // If we reach here, the socket is in use by another process
       this.logger.warn(
         'Socket file is in use by another process. Cannot start server.',
@@ -157,14 +170,58 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
     // Listen for force-poll event from client
     ipc.server.on('force-poll', async (data: any, socket: any) => {
       this.logger.log('Force poll requested by client');
-      
+
       // Acknowledge receipt
       ipc.server.emit(socket, 'force-poll-received', {
         timestamp: Date.now(),
       });
 
-      // Note: Force-poll will be handled by SchedulerService when Phase 7 integration is complete
-      // For now, just acknowledge the request
+      // Execute force poll via SchedulerService
+      if (this.schedulerService) {
+        try {
+          const result = await this.schedulerService.forcePoll();
+
+          // Emit result back to client
+          ipc.server.emit(socket, 'force-poll-result', {
+            success: result.success,
+            productCount: result.productCount,
+            newProducts: result.newProducts,
+            durationMs: result.durationMs,
+            error: result.error,
+            timestamp: Date.now(),
+          });
+
+          this.logger.log(
+            `Force poll completed: ${result.success ? 'success' : 'failed'}`,
+          );
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error';
+          this.logger.error(`Force poll failed: ${errorMessage}`, error.stack);
+
+          // Emit error back to client
+          ipc.server.emit(socket, 'force-poll-result', {
+            success: false,
+            productCount: 0,
+            newProducts: 0,
+            durationMs: 0,
+            error: errorMessage,
+            timestamp: Date.now(),
+          });
+        }
+      } else {
+        this.logger.warn('SchedulerService not available, cannot force poll');
+
+        // Emit error back to client
+        ipc.server.emit(socket, 'force-poll-result', {
+          success: false,
+          productCount: 0,
+          newProducts: 0,
+          durationMs: 0,
+          error: 'SchedulerService not available',
+          timestamp: Date.now(),
+        });
+      }
     });
 
     ipc.server.on('error', (error: Error) => {

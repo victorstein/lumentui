@@ -143,7 +143,9 @@ describe('AuthService', () => {
 
       await service.saveCookies(mockCookies as any);
 
-      expect(cookieStorageService.saveCookies).toHaveBeenCalledWith(mockCookies);
+      expect(cookieStorageService.saveCookies).toHaveBeenCalledWith(
+        mockCookies,
+      );
       expect(loggerService.log).toHaveBeenCalledWith(
         'Cookies saved successfully',
         'AuthService',

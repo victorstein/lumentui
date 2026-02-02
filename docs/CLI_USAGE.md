@@ -44,6 +44,7 @@ lumentui --version
 ```
 
 Expected output:
+
 ```
 0.0.1
 ```
@@ -62,6 +63,7 @@ lumentui -h
 ```
 
 **Output:**
+
 ```
 Usage: lumentui [options] [command]
 
@@ -90,6 +92,7 @@ lumentui -V
 ```
 
 **Output:**
+
 ```
 0.0.1
 ```
@@ -109,6 +112,7 @@ lumentui auth
 ```
 
 **What happens:**
+
 1. Prompts for macOS Keychain access (first time only)
 2. Extracts cookies from Chrome
 3. Validates cookie format
@@ -116,6 +120,7 @@ lumentui auth
 5. Confirms success
 
 **Output:**
+
 ```
 🔐 Extracting cookies from Chrome...
 ⚠️  macOS will ask for Keychain permission (first time only)
@@ -123,6 +128,7 @@ lumentui auth
 ```
 
 **Prerequisites:**
+
 - Must be logged into shop.lumenalta.com in Chrome
 - Chrome must be closed or cookies may be locked
 - macOS Keychain access required
@@ -136,16 +142,19 @@ lumentui auth --check
 ```
 
 **Output (valid session):**
+
 ```
 ✅ Session is valid
 ```
 
 **Output (invalid/expired session):**
+
 ```
 ❌ No valid session. Run: lumentui auth
 ```
 
 **Exit codes:**
+
 - `0` - Session is valid
 - `1` - Session is invalid or missing
 
@@ -173,6 +182,7 @@ lumentui start
 ```
 
 **What happens:**
+
 1. Checks for existing daemon
 2. Validates authentication cookies
 3. Starts NestJS application
@@ -181,6 +191,7 @@ lumentui start
 6. (Optional) Launches Ink TUI
 
 **Output:**
+
 ```
 🚀 Starting LumentuiAPI daemon...
 ✅ Daemon started (PID: 12345)
@@ -198,6 +209,7 @@ lumentui start -d
 ```
 
 **Output:**
+
 ```
 🚀 Starting LumentuiAPI daemon...
 ✅ Daemon started (PID: 12345)
@@ -213,6 +225,7 @@ LOG_LEVEL=debug lumentui start
 ```
 
 **Output:**
+
 ```
 🚀 Starting LumentuiAPI daemon...
 [DEBUG] Loading configuration from .env
@@ -242,6 +255,7 @@ lumentui stop
 ```
 
 **What happens:**
+
 1. Connects to daemon via IPC socket
 2. Sends shutdown signal
 3. Waits for graceful termination
@@ -249,6 +263,7 @@ lumentui stop
 5. Removes IPC socket
 
 **Output:**
+
 ```
 🛑 Stopping LumentuiAPI daemon...
 ✅ Daemon stopped successfully
@@ -264,6 +279,7 @@ lumentui stop -f
 ```
 
 **Output:**
+
 ```
 🛑 Force stopping LumentuiAPI daemon...
 ⚠️  Daemon killed (SIGKILL)
@@ -285,6 +301,7 @@ lumentui status
 ```
 
 **Output (daemon running):**
+
 ```
 ✅ Daemon Status: Running
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -312,6 +329,7 @@ Notifications:
 ```
 
 **Output (daemon not running):**
+
 ```
 ❌ Daemon Status: Not Running
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -329,6 +347,7 @@ lumentui status -w
 ```
 
 **Output:**
+
 ```
 ✅ Daemon Status: Running (refreshing every 5s)
 
@@ -350,6 +369,7 @@ lumentui status --json
 ```
 
 **Output:**
+
 ```json
 {
   "status": "running",
@@ -379,6 +399,7 @@ lumentui list
 ```
 
 **Output:**
+
 ```
 📦 Tracked Products (42 total)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -414,6 +435,7 @@ lumentui list -a
 ```
 
 **Output:**
+
 ```
 📦 Available Products (8 total)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -433,6 +455,7 @@ lumentui list --type="Electronics"
 ```
 
 **Output:**
+
 ```
 📦 Electronics (15 total)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -466,6 +489,7 @@ lumentui list --json > products.json
 ```
 
 **Output:**
+
 ```json
 [
   {
@@ -499,11 +523,13 @@ lumentui show <handle>
 ```
 
 **Example:**
+
 ```bash
 lumentui show wireless-headphones
 ```
 
 **Output:**
+
 ```
 📦 Product Details
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -557,6 +583,7 @@ lumentui config --list
 ```
 
 **Output:**
+
 ```
 ⚙️  Configuration
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -576,6 +603,7 @@ lumentui config set LUMENTUI_POLL_INTERVAL 60
 ```
 
 **Output:**
+
 ```
 ✅ Configuration updated: LUMENTUI_POLL_INTERVAL = 60
 ⚠️  Restart daemon for changes to take effect
@@ -588,6 +616,7 @@ lumentui config get LUMENTUI_POLL_INTERVAL
 ```
 
 **Output:**
+
 ```
 60
 ```
@@ -599,6 +628,7 @@ lumentui config reset
 ```
 
 **Output:**
+
 ```
 ⚠️  This will reset all configuration to defaults.
 Continue? (y/N): y
@@ -622,6 +652,7 @@ lumentui logs -f
 ```
 
 **Output:**
+
 ```
 [2025-01-21 15:30:00] [INFO] Polling products...
 [2025-01-21 15:30:02] [DEBUG] Fetching from Shopify API
@@ -671,6 +702,7 @@ lumentui doctor
 ```
 
 **Output:**
+
 ```
 🩺 Running Diagnostics...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -704,6 +736,7 @@ lumentui clean --logs
 ```
 
 **Output:**
+
 ```
 🧹 Cleaning logs older than 30 days...
 ✅ Removed 15 log files (12.4 MB freed)
@@ -716,6 +749,7 @@ lumentui clean --db
 ```
 
 **Output:**
+
 ```
 ⚠️  This will delete all tracked products!
 Continue? (y/N): y
@@ -730,6 +764,7 @@ lumentui clean --all
 ```
 
 **Output:**
+
 ```
 ⚠️  This will delete:
   • All logs
@@ -868,12 +903,12 @@ lumentui list --help
 
 ### Common Issues
 
-| Issue | Command | Solution |
-|-------|---------|----------|
-| Daemon won't start | `lumentui doctor` | Check diagnostics output |
-| Cookies expired | `lumentui auth --check` | Re-authenticate |
-| No products showing | `lumentui logs -n 50` | Check API errors |
-| High memory usage | `lumentui status` | Check uptime, restart |
+| Issue               | Command                 | Solution                 |
+| ------------------- | ----------------------- | ------------------------ |
+| Daemon won't start  | `lumentui doctor`       | Check diagnostics output |
+| Cookies expired     | `lumentui auth --check` | Re-authenticate          |
+| No products showing | `lumentui logs -n 50`   | Check API errors         |
+| High memory usage   | `lumentui status`       | Check uptime, restart    |
 
 ### Support
 

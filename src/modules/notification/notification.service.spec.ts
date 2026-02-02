@@ -217,10 +217,10 @@ describe('NotificationService', () => {
       }).compile();
 
       const testService = module.get<NotificationService>(NotificationService);
-      
+
       // Should not throw, just log error
       await expect(testService.onModuleInit()).resolves.not.toThrow();
-      
+
       expect(mockLoggerService.error).toHaveBeenCalledWith(
         expect.stringContaining('Failed to rebuild rate limit cache'),
         'NotificationService',
@@ -582,6 +582,203 @@ describe('NotificationService', () => {
 
       expect(history).toEqual([]);
       expect(mockLoggerService.error).toHaveBeenCalled();
+    });
+  });
+
+  describe('shouldNotify', () => {
+    it('should return true when no filters are set', () => {
+      mockConfigService.get = jest.fn().mockReturnValue('');
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(true);
+    });
+
+    it('should filter out products below minimum price', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '100';
+        return '';
+      });
+
+      const cheapProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Default',
+            price: 50,
+            sku: 'SKU',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const result = service.shouldNotify(cheapProduct);
+
+      expect(result).toBe(false);
+      expect(mockLoggerService.log).toHaveBeenCalledWith(
+        expect.stringContaining('below minimum'),
+        'NotificationService',
+      );
+    });
+
+    it('should allow products with at least one variant above minimum price', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '60';
+        return '';
+      });
+
+      const mixedProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Cheap',
+            price: 50,
+            sku: 'SKU1',
+            available: true,
+            inventoryQuantity: 1,
+          },
+          {
+            id: '2',
+            title: 'Expensive',
+            price: 70,
+            sku: 'SKU2',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const result = service.shouldNotify(mixedProduct);
+
+      expect(result).toBe(true);
+    });
+
+    it('should filter out products without matching keywords', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS')
+          return 'laptop,keyboard,monitor';
+        return '';
+      });
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(false);
+      expect(mockLoggerService.log).toHaveBeenCalledWith(
+        expect.stringContaining('does not contain any of'),
+        'NotificationService',
+      );
+    });
+
+    it('should allow products with matching keywords (case-insensitive)', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return 'GAMING,laptop,keyboard';
+        return '';
+      });
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle multiple keywords with whitespace', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS')
+          return '  laptop , gaming mouse  , keyboard  ';
+        return '';
+      });
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(true);
+    });
+
+    it('should apply both filters when both are set', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '50';
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return 'gaming,mouse';
+        return '';
+      });
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(true);
+    });
+
+    it('should filter out when price passes but keywords fail', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '50';
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return 'laptop,keyboard';
+        return '';
+      });
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(false);
+    });
+
+    it('should filter out when keywords pass but price fails', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '100';
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return 'gaming,mouse';
+        return '';
+      });
+
+      const cheapProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Default',
+            price: 50,
+            sku: 'SKU',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const result = service.shouldNotify(cheapProduct);
+
+      expect(result).toBe(false);
+    });
+
+    it('should handle invalid minimum price gracefully', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return 'invalid';
+        return '';
+      });
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle empty keywords string', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return '   ';
+        return '';
+      });
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle keywords with only commas', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return ',,,';
+        return '';
+      });
+
+      const result = service.shouldNotify(mockProduct);
+
+      expect(result).toBe(true);
     });
   });
 
