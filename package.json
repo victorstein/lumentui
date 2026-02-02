@@ -4,6 +4,13 @@
   "description": "Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time macOS notifications",
   "author": "Stein Hakase <stein.hakase.vs@gmail.com>",
   "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "keytar"
+    ]
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
