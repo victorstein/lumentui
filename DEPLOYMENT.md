@@ -167,10 +167,6 @@ LOG_MAX_FILES=14d
 # === Chrome Integration ===
 # Chrome profile name (for cookie extraction)
 CHROME_PROFILE=Default
-
-# === Health Check ===
-HEALTH_CHECK_ENABLED=true
-HEALTH_CHECK_PORT=3000
 ```
 
 #### 3. Secure Environment File
