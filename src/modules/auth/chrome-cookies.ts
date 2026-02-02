@@ -111,6 +111,7 @@ export async function getCookiesForUrl(
   }
 
   const tempDb = copyDbToTemp(cookieDbPath);
+  const debug = !!process.env.LUMENTUI_DEBUG;
 
   try {
     const password = getChromePassword();
@@ -122,9 +123,41 @@ export async function getCookiesForUrl(
     const parts = domain.split('.');
     const parentDomain = parts.length > 2 ? parts.slice(-2).join('.') : domain;
 
+    if (debug) {
+      console.log(`[debug] Cookie DB path: ${cookieDbPath}`);
+      console.log(`[debug] Temp DB path: ${tempDb}`);
+      console.log(
+        `[debug] WAL exists: ${fs.existsSync(cookieDbPath + '-wal')}`,
+      );
+      console.log(
+        `[debug] SHM exists: ${fs.existsSync(cookieDbPath + '-shm')}`,
+      );
+      console.log(`[debug] Domain: ${domain}`);
+      console.log(`[debug] Parent domain: ${parentDomain}`);
+      console.log(`[debug] Query: host_key LIKE '%${parentDomain}%'`);
+    }
+
     // Use node-sqlite3-wasm — WASM-based, no native deps, real FS + WAL support
     const { Database } = await import('node-sqlite3-wasm');
     const db = new Database(tempDb, { readOnly: true });
+
+    if (debug) {
+      // Dump all unique host_keys to see what's in the DB
+      const allHosts = db.all(
+        `SELECT DISTINCT host_key FROM cookies ORDER BY host_key`,
+      );
+      console.log(`[debug] Total unique host_keys in DB: ${allHosts.length}`);
+      const matching = allHosts.filter((r: any) =>
+        (r.host_key as string).includes('lumen'),
+      );
+      console.log(
+        `[debug] Host keys containing 'lumen': ${JSON.stringify(matching.map((r: any) => r.host_key))}`,
+      );
+
+      // Also check total cookie count
+      const countResult = db.all(`SELECT COUNT(*) as cnt FROM cookies`);
+      console.log(`[debug] Total cookies in DB: ${countResult[0]?.cnt}`);
+    }
 
     const rows = db.all(
       `SELECT name, encrypted_value, host_key, path, expires_utc, is_secure, is_httponly
@@ -132,6 +165,17 @@ export async function getCookiesForUrl(
        WHERE host_key LIKE ?`,
       [`%${parentDomain}%`],
     );
+
+    if (debug) {
+      console.log(`[debug] Rows matching domain: ${rows.length}`);
+      rows.forEach((row: any) => {
+        const encVal = row.encrypted_value;
+        const encLen = encVal instanceof Uint8Array ? encVal.length : 0;
+        console.log(
+          `[debug]   name=${row.name} host=${row.host_key} encrypted_len=${encLen}`,
+        );
+      });
+    }
 
     db.close();
 
@@ -147,6 +191,12 @@ export async function getCookiesForUrl(
         ),
         key,
       );
+
+      if (debug) {
+        console.log(
+          `[debug]   decrypted name=${row.name} value_len=${value.length} value_preview=${value.slice(0, 20)}...`,
+        );
+      }
 
       const expiresUtc = Number(row.expires_utc);
       const expires =
