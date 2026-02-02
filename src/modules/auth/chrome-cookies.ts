@@ -1,4 +1,3 @@
-import initSqlJs from 'sql.js';
 import { execSync } from 'child_process';
 import * as crypto from 'crypto';
 import * as path from 'path';
@@ -20,7 +19,7 @@ const CHROME_EPOCH_OFFSET = 11644473600;
 
 export function getChromePassword(): string {
   return execSync(
-    'security find-generic-password -w -s "Chrome Safe Storage" -a "Chrome"',
+    'security find-generic-password -w -s "Chrome Safe Storage"',
     { encoding: 'utf8' },
   ).trim();
 }
@@ -29,14 +28,21 @@ export function deriveKey(password: string): Buffer {
   return crypto.pbkdf2Sync(password, 'saltysalt', 1003, 16, 'sha1');
 }
 
-export function decryptValue(encryptedValue: Buffer, key: Buffer): string {
-  if (!encryptedValue || encryptedValue.length === 0) {
+export function decryptValue(encryptedHex: string, key: Buffer): string {
+  if (!encryptedHex || encryptedHex.length === 0) {
     return '';
   }
 
-  // v10 prefix means AES-128-CBC encrypted
+  // Convert hex string to Buffer
+  const encryptedValue = Buffer.from(encryptedHex, 'hex');
+
+  if (encryptedValue.length === 0) {
+    return '';
+  }
+
+  // v10/v11 prefix means AES-128-CBC encrypted
   const prefix = encryptedValue.slice(0, 3).toString('utf8');
-  if (prefix !== 'v10') {
+  if (prefix !== 'v10' && prefix !== 'v11') {
     // Unencrypted value
     return encryptedValue.toString('utf8');
   }
@@ -44,13 +50,17 @@ export function decryptValue(encryptedValue: Buffer, key: Buffer): string {
   const iv = Buffer.alloc(16, ' ');
   const data = encryptedValue.slice(3);
 
-  const decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
-  decipher.setAutoPadding(true);
+  try {
+    const decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
+    decipher.setAutoPadding(true);
 
-  let decrypted = decipher.update(data);
-  decrypted = Buffer.concat([decrypted, decipher.final()]);
+    let decrypted = decipher.update(data);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
 
-  return decrypted.toString('utf8');
+    return decrypted.toString('utf8');
+  } catch {
+    return '';
+  }
 }
 
 export function getChromeDbPath(profile: string = 'Default'): string {
@@ -66,8 +76,8 @@ export function getChromeDbPath(profile: string = 'Default'): string {
 }
 
 /**
- * Copy Chrome's cookie DB + WAL files to a temp directory.
- * Chrome uses WAL mode, so we need all three files for a consistent read.
+ * Copy Chrome's cookie DB + WAL/SHM files to a temp directory.
+ * The system sqlite3 CLI handles WAL natively when files are co-located.
  */
 function copyDbToTemp(cookieDbPath: string): string {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumentui-cookies-'));
@@ -75,32 +85,25 @@ function copyDbToTemp(cookieDbPath: string): string {
 
   fs.copyFileSync(cookieDbPath, tempDb);
 
-  // Copy WAL and SHM files if they exist (Chrome uses WAL mode)
-  const walPath = cookieDbPath + '-wal';
-  const shmPath = cookieDbPath + '-shm';
-  if (fs.existsSync(walPath)) {
-    fs.copyFileSync(walPath, tempDb + '-wal');
-  }
-  if (fs.existsSync(shmPath)) {
-    fs.copyFileSync(shmPath, tempDb + '-shm');
+  for (const ext of ['-wal', '-shm']) {
+    const src = cookieDbPath + ext;
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, tempDb + ext);
+    }
   }
 
   return tempDb;
 }
 
-/**
- * Clean up temp DB directory
- */
 function cleanupTemp(tempDb: string): void {
   try {
-    const dir = path.dirname(tempDb);
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(path.dirname(tempDb), { recursive: true, force: true });
   } catch {}
 }
 
 /**
- * Query Chrome cookie DB for cookies matching a URL.
- * Returns all matching cookies (not just storefront_digest).
+ * Query Chrome cookie DB using the system sqlite3 CLI.
+ * This handles WAL mode natively, unlike in-memory WASM engines.
  */
 export async function getCookiesForUrl(
   url: string,
@@ -120,62 +123,50 @@ export async function getCookiesForUrl(
     const password = getChromePassword();
     const key = deriveKey(password);
 
-    // Initialize sql.js and open the copied DB with WAL support
-    const SQL = await initSqlJs();
-    const fileBuffer = fs.readFileSync(tempDb);
-    const db = new SQL.Database(new Uint8Array(fileBuffer));
-
     // Parse the URL to get the domain and parent domain
     const parsedUrl = new URL(url);
     const domain = parsedUrl.hostname;
     const parts = domain.split('.');
     const parentDomain = parts.length > 2 ? parts.slice(-2).join('.') : domain;
 
-    // Query cookies matching the domain or parent domain
-    const results = db.exec(
-      `
-      SELECT name, encrypted_value, host_key, path, expires_utc, is_secure, is_httponly
-      FROM cookies
-      WHERE host_key IN (?, ?, ?, ?)
-    `,
-      [domain, `.${domain}`, parentDomain, `.${parentDomain}`],
-    );
+    // Use system sqlite3 CLI — handles WAL mode natively
+    const query = `SELECT name, hex(encrypted_value), host_key, path, expires_utc, is_secure, is_httponly FROM cookies WHERE host_key LIKE '%${parentDomain}%';`;
 
-    db.close();
+    const result = execSync(`sqlite3 -separator '|' "${tempDb}" "${query}"`, {
+      encoding: 'utf8',
+      timeout: 5000,
+    }).trim();
 
-    if (!results.length || !results[0].values.length) {
+    if (!result) {
       return [];
     }
 
-    const columns = results[0].columns;
-    const nameIdx = columns.indexOf('name');
-    const encIdx = columns.indexOf('encrypted_value');
-    const hostIdx = columns.indexOf('host_key');
-    const pathIdx = columns.indexOf('path');
-    const expiresIdx = columns.indexOf('expires_utc');
-    const secureIdx = columns.indexOf('is_secure');
-    const httpOnlyIdx = columns.indexOf('is_httponly');
+    return result.split('\n').map((line) => {
+      const [
+        name,
+        encryptedHex,
+        hostKey,
+        cookiePath,
+        expiresUtc,
+        isSecure,
+        isHttpOnly,
+      ] = line.split('|');
 
-    return results[0].values.map((row) => {
-      const encVal = row[encIdx];
-      const value = decryptValue(
-        Buffer.from(encVal instanceof Uint8Array ? encVal : []),
-        key,
-      );
-      const expiresUtc = Number(row[expiresIdx]);
+      const value = decryptValue(encryptedHex, key);
+      const expiresNum = Number(expiresUtc);
       const expires =
-        expiresUtc > 0
-          ? Math.floor(expiresUtc / 1000000) - CHROME_EPOCH_OFFSET
+        expiresNum > 0
+          ? Math.floor(expiresNum / 1000000) - CHROME_EPOCH_OFFSET
           : 0;
 
       return {
-        name: row[nameIdx] as string,
+        name,
         value,
-        domain: row[hostIdx] as string,
-        path: row[pathIdx] as string,
+        domain: hostKey,
+        path: cookiePath,
         expires,
-        httpOnly: !!row[httpOnlyIdx],
-        secure: !!row[secureIdx],
+        httpOnly: isHttpOnly === '1',
+        secure: isSecure === '1',
       };
     });
   } finally {
