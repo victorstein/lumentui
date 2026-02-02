@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import * as ipc from 'node-ipc';
+import * as ipcModule from 'node-ipc';
+const ipc = (ipcModule as any).default || ipcModule;
 
 /**
  * Product data structure from daemon

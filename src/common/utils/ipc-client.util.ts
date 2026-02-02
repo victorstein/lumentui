@@ -1,4 +1,5 @@
-import * as ipc from 'node-ipc';
+import * as ipcModule from 'node-ipc';
+const ipc = (ipcModule as any).default || ipcModule;
 
 export class IpcClient {
   private static readonly SOCKET_PATH = '/tmp/lumentui.sock';

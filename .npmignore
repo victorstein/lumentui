@@ -1,0 +1,52 @@
+# Source
+src/
+
+# Tests
+test/
+coverage/
+**/*.spec.ts
+**/*.spec.js
+
+# Config
+.claude/
+.beads/
+.github/
+.env
+.env.example
+tsconfig*.json
+nest-cli.json
+jest.config.*
+eslint.config.*
+.prettierrc
+.editorconfig
+
+# Build artifacts
+tsconfig.ui.tsbuildinfo
+*.tsbuildinfo
+
+# Docs (not needed in npm package)
+docs/
+HOMEBREW_SETUP.md
+AGENTS_GUIDE.md.DEPRECATED
+_pre_flatten_backup/
+
+# Templates
+*.template
+
+# Data
+data/
+
+# Deployment/contribution docs
+AGENTS.md
+CONTRIBUTING.md
+DEPLOYMENT.md
+.env.production
+.gitattributes
+
+# Scripts/deploy
+scripts/
+ecosystem.config.js
+
+# Misc
+node_modules/
+*.log

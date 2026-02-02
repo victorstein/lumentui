@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time macOS notifications",
   "author": "Stein Hakase <stein.hakase.vs@gmail.com>",
-  "private": true,
+  "private": false,
   "packageManager": "pnpm@10.28.2",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/steinhakase/lumentui.git"
+    "url": "https://github.com/victorstein/lumentui.git"
   },
   "keywords": [
     "nestjs",

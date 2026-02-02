@@ -114,7 +114,11 @@ export async function getCookiesForUrl(
     db.close();
 
     return rows.map((row) => {
-      const value = decryptValue(row.encrypted_value as Buffer, key);
+      const encVal = row.encrypted_value;
+      const value = decryptValue(
+        Buffer.from(encVal instanceof Uint8Array ? encVal : []),
+        key,
+      );
       const expiresUtc = Number(row.expires_utc);
       // Convert Chrome epoch (microseconds since 1601) to Unix epoch (seconds since 1970)
       const expires =

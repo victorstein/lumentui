@@ -7,7 +7,8 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as ipc from 'node-ipc';
+import * as ipcModule from 'node-ipc';
+const ipc = (ipcModule as any).default || ipcModule;
 import { existsSync, unlinkSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
