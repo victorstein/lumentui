@@ -49,6 +49,9 @@ importers:
       node-notifier:
         specifier: ^10.0.1
         version: 10.0.1
+      node-sqlite3-wasm:
+        specifier: ^0.8.53
+        version: 0.8.53
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -4620,6 +4623,12 @@ packages:
         integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==,
       }
 
+  node-sqlite3-wasm@0.8.53:
+    resolution:
+      {
+        integrity: sha512-HPuGOPj3L+h3WSf0XikIXTDpsRxlVmzBC3RMgqi3yDg9CEbm/4Hw3rrDodeITqITjm07X4atWLlDMMI8KERMiQ==,
+      }
+
   noms@0.0.0:
     resolution:
       {
@@ -9171,6 +9180,8 @@ snapshots:
       which: 2.0.2
 
   node-releases@2.0.27: {}
+
+  node-sqlite3-wasm@0.8.53: {}
 
   noms@0.0.0:
     dependencies:

@@ -28,15 +28,8 @@ export function deriveKey(password: string): Buffer {
   return crypto.pbkdf2Sync(password, 'saltysalt', 1003, 16, 'sha1');
 }
 
-export function decryptValue(encryptedHex: string, key: Buffer): string {
-  if (!encryptedHex || encryptedHex.length === 0) {
-    return '';
-  }
-
-  // Convert hex string to Buffer
-  const encryptedValue = Buffer.from(encryptedHex, 'hex');
-
-  if (encryptedValue.length === 0) {
+export function decryptValue(encryptedValue: Buffer, key: Buffer): string {
+  if (!encryptedValue || encryptedValue.length === 0) {
     return '';
   }
 
@@ -77,7 +70,7 @@ export function getChromeDbPath(profile: string = 'Default'): string {
 
 /**
  * Copy Chrome's cookie DB + WAL/SHM files to a temp directory.
- * The system sqlite3 CLI handles WAL natively when files are co-located.
+ * node-sqlite3-wasm has real filesystem access and reads WAL natively.
  */
 function copyDbToTemp(cookieDbPath: string): string {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumentui-cookies-'));
@@ -102,8 +95,8 @@ function cleanupTemp(tempDb: string): void {
 }
 
 /**
- * Query Chrome cookie DB using the system sqlite3 CLI.
- * This handles WAL mode natively, unlike in-memory WASM engines.
+ * Query Chrome cookie DB for cookies matching a URL.
+ * Uses node-sqlite3-wasm which has real filesystem access and WAL support.
  */
 export async function getCookiesForUrl(
   url: string,
@@ -123,50 +116,52 @@ export async function getCookiesForUrl(
     const password = getChromePassword();
     const key = deriveKey(password);
 
-    // Parse the URL to get the domain and parent domain
+    // Parse the URL to get domain and parent domain
     const parsedUrl = new URL(url);
     const domain = parsedUrl.hostname;
     const parts = domain.split('.');
     const parentDomain = parts.length > 2 ? parts.slice(-2).join('.') : domain;
 
-    // Use system sqlite3 CLI — handles WAL mode natively
-    const query = `SELECT name, hex(encrypted_value), host_key, path, expires_utc, is_secure, is_httponly FROM cookies WHERE host_key LIKE '%${parentDomain}%';`;
+    // Use node-sqlite3-wasm — WASM-based, no native deps, real FS + WAL support
+    const { Database } = await import('node-sqlite3-wasm');
+    const db = new Database(tempDb, { readOnly: true });
 
-    const result = execSync(`sqlite3 -separator '|' "${tempDb}" "${query}"`, {
-      encoding: 'utf8',
-      timeout: 5000,
-    }).trim();
+    const rows = db.all(
+      `SELECT name, encrypted_value, host_key, path, expires_utc, is_secure, is_httponly
+       FROM cookies
+       WHERE host_key LIKE ?`,
+      [`%${parentDomain}%`],
+    );
 
-    if (!result) {
-      return [];
-    }
+    db.close();
 
-    return result.split('\n').map((line) => {
-      const [
-        name,
-        encryptedHex,
-        hostKey,
-        cookiePath,
-        expiresUtc,
-        isSecure,
-        isHttpOnly,
-      ] = line.split('|');
+    return rows.map((row: any) => {
+      const encVal = row.encrypted_value;
+      const value = decryptValue(
+        Buffer.from(
+          encVal instanceof Uint8Array
+            ? encVal
+            : typeof encVal === 'object' && encVal?.buffer
+              ? encVal
+              : [],
+        ),
+        key,
+      );
 
-      const value = decryptValue(encryptedHex, key);
-      const expiresNum = Number(expiresUtc);
+      const expiresUtc = Number(row.expires_utc);
       const expires =
-        expiresNum > 0
-          ? Math.floor(expiresNum / 1000000) - CHROME_EPOCH_OFFSET
+        expiresUtc > 0
+          ? Math.floor(expiresUtc / 1000000) - CHROME_EPOCH_OFFSET
           : 0;
 
       return {
-        name,
+        name: row.name as string,
         value,
-        domain: hostKey,
-        path: cookiePath,
+        domain: row.host_key as string,
+        path: row.path as string,
         expires,
-        httpOnly: isHttpOnly === '1',
-        secure: isSecure === '1',
+        httpOnly: row.is_httponly === 1,
+        secure: row.is_secure === 1,
       };
     });
   } finally {
