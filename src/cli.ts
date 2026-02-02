@@ -200,65 +200,23 @@ program
         }
       } else {
         const url = 'https://shop.lumenalta.com';
-
-        // First attempt: check if cookie already exists
-        let found = false;
-        try {
-          const cookies = await authService.extractCookies(url);
-          await authService.saveCookies(cookies);
-          found = true;
-        } catch {
-          // Cookie not found — will open browser and poll
-        }
-
-        if (found) {
-          console.log('✅ Authentication successful!');
-          console.log('You can now use: lumentui start');
-          process.exit(0);
-        }
-
-        // Open browser for the user to authenticate
-        console.log('🌐 Opening shop.lumenalta.com in Chrome...');
-        console.log('   Please log in, then wait for confirmation.\n');
         const { execSync } = require('child_process');
-        execSync(`open "${url}"`);
 
-        // Poll for the cookie for up to 60 seconds
-        const POLL_INTERVAL_MS = 3000;
-        const MAX_WAIT_MS = 60000;
-        const startTime = Date.now();
-        const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-        let frame = 0;
+        // Render Ink AuthFlow component
+        // @ts-ignore - Dynamic ESM import
+        const React = await import('react');
+        // @ts-ignore - Dynamic ESM import
+        const { render } = await import('ink');
+        // @ts-ignore - Dynamic import of built UI
+        const AuthFlowModule = await import('./ui/components/AuthFlow.js');
 
-        while (Date.now() - startTime < MAX_WAIT_MS) {
-          const remaining = Math.round(
-            (MAX_WAIT_MS - (Date.now() - startTime)) / 1000,
-          );
-          process.stdout.write(
-            `\r${frames[frame++ % frames.length]} Waiting for authentication... (${remaining}s remaining)`,
-          );
-
-          await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-
-          try {
-            const cookies = await authService.extractCookies(url);
-            await authService.saveCookies(cookies);
-            process.stdout.write('\r' + ' '.repeat(60) + '\r');
-            console.log('✅ Authentication successful!');
-            console.log('You can now use: lumentui start');
-            process.exit(0);
-          } catch {
-            // Not found yet, keep polling
-          }
-        }
-
-        // Timed out
-        process.stdout.write('\r' + ' '.repeat(60) + '\r');
-        console.log('❌ Authentication timed out.');
-        console.log(
-          '   Please log in to shop.lumenalta.com in Chrome and try again.',
+        render(
+          React.createElement(AuthFlowModule.AuthFlow, {
+            extractCookies: () => authService.extractCookies(url),
+            saveCookies: (cookies: any) => authService.saveCookies(cookies),
+            openBrowser: () => execSync(`open "${url}"`),
+          }),
         );
-        process.exit(1);
       }
 
       await app.close();
