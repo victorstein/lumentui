@@ -13,6 +13,200 @@ import * as fs from 'fs';
 
 const program = new Command();
 
+/**
+ * Validation helpers
+ */
+class CliValidator {
+  /**
+   * Validate phone number format (E.164)
+   * @param phone Phone number string
+   * @returns true if valid, error message if invalid
+   */
+  static validatePhoneNumber(phone: string): { valid: boolean; error?: string } {
+    if (!phone) {
+      return { valid: true }; // Optional field
+    }
+
+    if (!phone.startsWith('+')) {
+      return {
+        valid: false,
+        error: 'Phone number must start with + (E.164 format, e.g., +50586826131)',
+      };
+    }
+
+    // Remove + and check if remaining chars are digits
+    const digits = phone.slice(1);
+    if (!/^\d+$/.test(digits)) {
+      return {
+        valid: false,
+        error: 'Phone number must contain only digits after + symbol',
+      };
+    }
+
+    if (digits.length < 7 || digits.length > 15) {
+      return {
+        valid: false,
+        error: 'Phone number must be between 7 and 15 digits',
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate numeric environment variable
+   * @param value String value from env
+   * @param name Variable name
+   * @param min Minimum allowed value
+   * @param max Maximum allowed value
+   */
+  static validateNumeric(
+    value: string | undefined,
+    name: string,
+    min?: number,
+    max?: number,
+  ): { valid: boolean; error?: string } {
+    if (!value) {
+      return { valid: true }; // Optional field
+    }
+
+    const num = parseInt(value, 10);
+    if (isNaN(num)) {
+      return {
+        valid: false,
+        error: `${name} must be a valid number (got: "${value}")`,
+      };
+    }
+
+    if (min !== undefined && num < min) {
+      return {
+        valid: false,
+        error: `${name} must be at least ${min} (got: ${num})`,
+      };
+    }
+
+    if (max !== undefined && num > max) {
+      return {
+        valid: false,
+        error: `${name} must be at most ${max} (got: ${num})`,
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate file path accessibility
+   * @param filePath Path to validate
+   * @param shouldExist Whether file must exist
+   * @param shouldBeWritable Whether file/directory must be writable
+   */
+  static validateFilePath(
+    filePath: string,
+    options: {
+      shouldExist?: boolean;
+      shouldBeWritable?: boolean;
+      name?: string;
+    } = {},
+  ): { valid: boolean; error?: string } {
+    const name = options.name || 'File path';
+
+    if (options.shouldExist && !fs.existsSync(filePath)) {
+      return {
+        valid: false,
+        error: `${name} does not exist: ${filePath}`,
+      };
+    }
+
+    if (options.shouldBeWritable) {
+      // Check if parent directory is writable
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        return {
+          valid: false,
+          error: `${name} parent directory does not exist: ${dir}`,
+        };
+      }
+
+      try {
+        fs.accessSync(dir, fs.constants.W_OK);
+      } catch {
+        return {
+          valid: false,
+          error: `${name} directory is not writable: ${dir}`,
+        };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate configuration from environment variables
+   */
+  static validateEnvironment(): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // Validate phone number
+    const phoneNumber = process.env.NOTIFICATION_PHONE;
+    if (phoneNumber) {
+      const phoneResult = this.validatePhoneNumber(phoneNumber);
+      if (!phoneResult.valid) {
+        errors.push(`NOTIFICATION_PHONE: ${phoneResult.error}`);
+      }
+    }
+
+    // Validate poll interval
+    const pollInterval = process.env.LUMENTUI_POLL_INTERVAL;
+    const pollResult = this.validateNumeric(
+      pollInterval,
+      'LUMENTUI_POLL_INTERVAL',
+      10,
+      86400,
+    );
+    if (!pollResult.valid) {
+      errors.push(pollResult.error!);
+    }
+
+    // Validate timeout
+    const timeout = process.env.SHOPIFY_TIMEOUT_MS;
+    const timeoutResult = this.validateNumeric(
+      timeout,
+      'SHOPIFY_TIMEOUT_MS',
+      1000,
+      60000,
+    );
+    if (!timeoutResult.valid) {
+      errors.push(timeoutResult.error!);
+    }
+
+    // Validate database path (parent dir must be writable)
+    const dbPath = process.env.DB_PATH || 'data/lumentui.db';
+    const dbResult = this.validateFilePath(dbPath, {
+      shouldBeWritable: true,
+      name: 'DB_PATH',
+    });
+    if (!dbResult.valid) {
+      errors.push(dbResult.error!);
+    }
+
+    // Validate log file path (parent dir must be writable)
+    const logPath = process.env.LOG_FILE || 'data/logs/app.log';
+    const logResult = this.validateFilePath(logPath, {
+      shouldBeWritable: true,
+      name: 'LOG_FILE',
+    });
+    if (!logResult.valid) {
+      errors.push(logResult.error!);
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  }
+}
+
 program
   .name('lumentui')
   .description('🌟 LumenTUI - Monitor shop.lumenalta.com for new products')
@@ -81,6 +275,19 @@ program
   .option('--daemon-only', 'Start only daemon (no TUI)')
   .action(async (options) => {
     try {
+      // Validate environment configuration
+      console.log('🔍 Validating configuration...');
+      const validationResult = CliValidator.validateEnvironment();
+      
+      if (!validationResult.valid) {
+        console.error('❌ Configuration validation failed:\n');
+        validationResult.errors.forEach((error) => {
+          console.error(`  • ${error}`);
+        });
+        console.error('\nPlease fix the above errors in your .env file and try again.');
+        process.exit(1);
+      }
+
       // Check if daemon is already running
       const status = PidManager.getDaemonStatus();
       if (status.isRunning) {
@@ -95,8 +302,13 @@ program
       // Path to compiled daemon
       const daemonPath = path.join(process.cwd(), 'dist', 'main.js');
 
-      if (!fs.existsSync(daemonPath)) {
-        console.error('❌ Daemon not built. Run: npm run build');
+      const daemonPathResult = CliValidator.validateFilePath(daemonPath, {
+        shouldExist: true,
+        name: 'Daemon binary',
+      });
+      if (!daemonPathResult.valid) {
+        console.error(`❌ ${daemonPathResult.error}`);
+        console.error('Run: npm run build');
         process.exit(1);
       }
 
