@@ -319,11 +319,11 @@ brew install lumentui
 
 ### Dependencies Runtime
 
-Si lumentui requiere más que solo Node (ej: sqlite3 nativo), agrégalas:
+LumenTUI now uses sql.js (WASM SQLite), so no native dependencies are required:
 
 ```ruby
 depends_on "node"
-depends_on "sqlite"  # si usas better-sqlite3
+# No SQLite dependency needed - sql.js is WASM-based
 ```
 
 ### Caveats (Avisos post-instalación)

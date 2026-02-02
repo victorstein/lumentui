@@ -546,7 +546,7 @@ GitHub: [@steinhakase](https://github.com/steinhakase)
 - **node-notifier** - macOS notification integration
 - **Shopify** - Storefront API
 - **chrome-cookies-secure** - Cookie extraction
-- **better-sqlite3** - Database layer
+- **sql.js** - WASM-based SQLite database layer
 
 ---
 

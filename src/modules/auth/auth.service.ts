@@ -22,8 +22,8 @@ export class AuthService {
       const profile =
         this.configService.get<string>('CHROME_PROFILE') || 'Default';
 
-      // Extract cookies from Chrome using better-sqlite3
-      const cookies = getCookiesForUrl(url, profile);
+      // Extract cookies from Chrome using sql.js
+      const cookies = await getCookiesForUrl(url, profile);
 
       // Filter for storefront_digest cookie
       const digestCookie = cookies.find((c) => c.name === 'storefront_digest');

@@ -58,9 +58,9 @@ export class SchedulerService implements OnModuleInit {
 
   /**
    * Automatic poll triggered by cron
-   * Runs every 30 minutes by default
+   * Runs every 1 minute by default
    */
-  @Cron(CronExpression.EVERY_30_MINUTES, {
+  @Cron(CronExpression.EVERY_MINUTE, {
     name: 'auto-poll',
   })
   async handleAutomaticPoll(): Promise<void> {

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 import { execSync } from 'child_process';
 import * as crypto from 'crypto';
 import * as path from 'path';
@@ -65,10 +65,10 @@ export function getChromeDbPath(profile: string = 'Default'): string {
   );
 }
 
-export function getCookiesForUrl(
+export async function getCookiesForUrl(
   url: string,
   profile?: string,
-): ChromeCookie[] {
+): Promise<ChromeCookie[]> {
   const cookieDbPath = getChromeDbPath(profile);
 
   if (!fs.existsSync(cookieDbPath)) {
@@ -85,27 +85,36 @@ export function getCookiesForUrl(
     const password = getChromePassword();
     const key = deriveKey(password);
 
-    const db = new Database(tempDb, { readonly: true });
+    // Initialize sql.js
+    const SQL = await initSqlJs();
+    const fileBuffer = fs.readFileSync(tempDb);
+    const db = new SQL.Database(new Uint8Array(fileBuffer));
 
     // Parse the URL to get the domain
     const parsedUrl = new URL(url);
     const domain = parsedUrl.hostname;
 
     // Query cookies matching the domain
-    const rows = db
-      .prepare(
-        `
+    const stmt = db.prepare(
+      `
       SELECT name, encrypted_value, host_key, path, expires_utc, is_secure, is_httponly
       FROM cookies
       WHERE host_key LIKE ? OR host_key LIKE ?
     `,
-      )
-      .all(`%${domain}`, `.${domain}`) as any[];
+    );
+
+    stmt.bind([`%${domain}`, `.${domain}`]);
+
+    const rows: any[] = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    stmt.free();
 
     db.close();
 
     return rows.map((row) => {
-      const value = decryptValue(row.encrypted_value, key);
+      const value = decryptValue(row.encrypted_value as Buffer, key);
       const expiresUtc = Number(row.expires_utc);
       // Convert Chrome epoch (microseconds since 1601) to Unix epoch (seconds since 1970)
       const expires =
@@ -114,10 +123,10 @@ export function getCookiesForUrl(
           : 0;
 
       return {
-        name: row.name,
+        name: row.name as string,
         value,
-        domain: row.host_key,
-        path: row.path,
+        domain: row.host_key as string,
+        path: row.path as string,
         expires,
         httpOnly: !!row.is_httponly,
         secure: !!row.is_secure,

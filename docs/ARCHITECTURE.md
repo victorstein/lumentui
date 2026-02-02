@@ -60,7 +60,7 @@ Comprehensive architectural overview of the LumentuiAPI NestJS application.
 | **AppModule**          | Root module, dependency injection     | NestJS                |
 | **AuthModule**         | Cookie extraction, session management | chrome-cookies-secure |
 | **ApiModule**          | Shopify API integration               | Axios, axios-retry    |
-| **StorageModule**      | Data persistence                      | better-sqlite3        |
+| **StorageModule**      | Data persistence                      | sql.js (WASM SQLite)  |
 | **SchedulerModule**    | Periodic polling                      | @nestjs/schedule      |
 | **NotificationModule** | macOS native notifications            | node-notifier         |
 | **IpcModule**          | Inter-process communication           | node-ipc              |

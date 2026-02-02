@@ -139,52 +139,16 @@ export class NotificationService implements OnModuleInit {
    * Record notification in database
    */
   private recordNotification(productId: string, sent: boolean): void {
-    try {
-      const db = this.databaseService.getDatabase();
-
-      db.prepare(
-        `
-        INSERT INTO notifications (product_id, timestamp, sent)
-        VALUES (?, ?, ?)
-      `,
-      ).run(productId, Date.now(), sent ? 1 : 0);
-
-      this.logger.log(
-        `Recorded notification for product ${productId} (sent: ${sent})`,
-        'NotificationService',
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to record notification: ${error.message}`,
-        'NotificationService',
-      );
-    }
+    // Use DatabaseService method instead of raw db access
+    this.databaseService.recordNotification(productId, sent);
   }
 
   /**
    * Get notification history for a product
    */
   getNotificationHistory(productId: string, limit: number = 10): any[] {
-    try {
-      const db = this.databaseService.getDatabase();
-
-      return db
-        .prepare(
-          `
-          SELECT * FROM notifications 
-          WHERE product_id = ? 
-          ORDER BY timestamp DESC 
-          LIMIT ?
-        `,
-        )
-        .all(productId, limit);
-    } catch (error) {
-      this.logger.error(
-        `Failed to get notification history: ${error.message}`,
-        'NotificationService',
-      );
-      return [];
-    }
+    // Use DatabaseService method instead of raw db access
+    return this.databaseService.getNotificationHistory(productId, limit);
   }
 
   /**
@@ -193,25 +157,12 @@ export class NotificationService implements OnModuleInit {
    */
   private rebuildRateLimitCache(): void {
     try {
-      const db = this.databaseService.getDatabase();
-
       // Calculate timestamp threshold (current time - rate limit window)
       const rateLimitThreshold = Date.now() - RATE_LIMIT_MINUTES * 60 * 1000;
 
       // Get last successful notification for each product within rate limit window
-      const recentNotifications = db
-        .prepare(
-          `
-          SELECT product_id, MAX(timestamp) as last_sent
-          FROM notifications
-          WHERE sent = 1 AND timestamp > ?
-          GROUP BY product_id
-        `,
-        )
-        .all(rateLimitThreshold) as Array<{
-        product_id: string;
-        last_sent: number;
-      }>;
+      const recentNotifications =
+        this.databaseService.getRecentNotifications(rateLimitThreshold);
 
       // Rebuild cache
       this.notificationCache.clear();

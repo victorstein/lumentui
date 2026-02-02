@@ -16,7 +16,7 @@ NestJS backend specialist for LumenTUI daemon modules.
 | Framework  | NestJS 11                    |
 | Scheduling | @nestjs/schedule (cron jobs) |
 | HTTP       | @nestjs/axios + axios-retry  |
-| Database   | better-sqlite3 (SQLite)      |
+| Database   | sql.js (WASM SQLite)         |
 | Config     | @nestjs/config               |
 | Auth       | chrome-cookies-secure        |
 | IPC        | node-ipc (Unix socket)       |
