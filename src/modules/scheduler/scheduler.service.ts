@@ -6,6 +6,7 @@ import { ShopifyService } from '../api/shopify/shopify.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { ProductNormalizer } from '../api/utils/normalizer.util';
 import { ProductDto } from '../api/dto/product.dto';
+import { IpcGateway } from '../ipc/ipc.gateway';
 
 @Injectable()
 export class SchedulerService implements OnModuleInit {
@@ -17,6 +18,7 @@ export class SchedulerService implements OnModuleInit {
     private readonly databaseService: DatabaseService,
     private readonly configService: ConfigService,
     private readonly logger: LoggerService,
+    private readonly ipcGateway: IpcGateway,
   ) {}
 
   onModuleInit() {
@@ -129,10 +131,19 @@ export class SchedulerService implements OnModuleInit {
       // Save products to database
       const savedCount = this.databaseService.saveProducts(productsToSave);
 
-      // Count new products
-      const newProducts = productsToSave.filter(
+      // Emit products updated event
+      this.ipcGateway.emitProductsUpdated(productsToSave);
+
+      // Count new products and emit events for each
+      const newProductList = productsToSave.filter(
         (p) => !existingProductIds.has(p.id),
-      ).length;
+      );
+      const newProducts = newProductList.length;
+
+      // Emit individual new product events
+      for (const newProduct of newProductList) {
+        this.ipcGateway.emitProductNew(newProduct);
+      }
 
       const durationMs = Date.now() - startTime;
 
@@ -145,6 +156,9 @@ export class SchedulerService implements OnModuleInit {
       };
 
       this.databaseService.recordPoll(pollMetrics);
+
+      // Emit heartbeat at the end of poll
+      this.ipcGateway.emitHeartbeat(Date.now());
 
       this.logger.log(
         `Poll completed: ${savedCount} products, ${newProducts} new, ${durationMs}ms`,
@@ -167,6 +181,9 @@ export class SchedulerService implements OnModuleInit {
         error instanceof Error ? error.stack : undefined,
         'SchedulerService',
       );
+
+      // Emit error to IPC clients
+      this.ipcGateway.emitError(errorMessage);
 
       // Record failed poll
       this.databaseService.recordPoll({

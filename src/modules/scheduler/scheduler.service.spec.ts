@@ -4,6 +4,7 @@ import { SchedulerService } from './scheduler.service';
 import { ShopifyService } from '../api/shopify/shopify.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { LoggerService } from '../../common/logger/logger.service';
+import { IpcGateway } from '../ipc/ipc.gateway';
 import { ShopifyProduct } from '../api/interfaces/shopify.interface';
 import { ProductEntity } from '../storage/entities/product.entity';
 
@@ -13,6 +14,7 @@ describe('SchedulerService', () => {
   let databaseService: jest.Mocked<DatabaseService>;
   let configService: jest.Mocked<ConfigService>;
   let loggerService: jest.Mocked<LoggerService>;
+  let ipcGateway: jest.Mocked<IpcGateway>;
 
   // Mock data
   const mockShopifyProducts: ShopifyProduct[] = [
@@ -115,6 +117,15 @@ describe('SchedulerService', () => {
       warn: jest.fn(),
     };
 
+    const mockIpcGateway = {
+      emitHeartbeat: jest.fn(),
+      emitProductsUpdated: jest.fn(),
+      emitProductNew: jest.fn(),
+      emitError: jest.fn(),
+      emitLog: jest.fn(),
+      getStatus: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SchedulerService,
@@ -134,6 +145,10 @@ describe('SchedulerService', () => {
           provide: LoggerService,
           useValue: mockLoggerService,
         },
+        {
+          provide: IpcGateway,
+          useValue: mockIpcGateway,
+        },
       ],
     }).compile();
 
@@ -142,6 +157,7 @@ describe('SchedulerService', () => {
     databaseService = module.get(DatabaseService);
     configService = module.get(ConfigService);
     loggerService = module.get(LoggerService);
+    ipcGateway = module.get(IpcGateway);
   });
 
   afterEach(() => {
@@ -219,6 +235,11 @@ describe('SchedulerService', () => {
           newProducts: 1,
         }),
       );
+      
+      // Verify IPC events
+      expect(ipcGateway.emitProductsUpdated).toHaveBeenCalled();
+      expect(ipcGateway.emitProductNew).toHaveBeenCalled();
+      expect(ipcGateway.emitHeartbeat).toHaveBeenCalled();
     });
 
     it('should detect new vs existing products', async () => {
@@ -297,6 +318,9 @@ describe('SchedulerService', () => {
           error: 'Shopify API error',
         }),
       );
+      
+      // Verify error emitted via IPC
+      expect(ipcGateway.emitError).toHaveBeenCalledWith('Shopify API error');
     });
 
     it('should handle empty product list', async () => {
