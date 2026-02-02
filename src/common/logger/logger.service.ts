@@ -13,16 +13,20 @@ export class LoggerService implements NestLoggerService {
       'data/logs/app.log',
     );
 
-    this.logger = winston.createLogger({
-      level: logLevel,
-      format: winston.format.combine(
-        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        winston.format.errors({ stack: true }),
-        winston.format.splat(),
-        winston.format.json(),
-      ),
-      transports: [
-        // Console transport
+    const transports: winston.transport[] = [
+      // File transport (always active)
+      new winston.transports.File({
+        filename: logFile,
+        format: winston.format.combine(
+          winston.format.timestamp(),
+          winston.format.json(),
+        ),
+      }),
+    ];
+
+    // Only add console transport when running as daemon (not CLI)
+    if (!process.env.LUMENTUI_CLI_MODE) {
+      transports.push(
         new winston.transports.Console({
           format: winston.format.combine(
             winston.format.colorize(),
@@ -37,15 +41,18 @@ export class LoggerService implements NestLoggerService {
             ),
           ),
         }),
-        // File transport
-        new winston.transports.File({
-          filename: logFile,
-          format: winston.format.combine(
-            winston.format.timestamp(),
-            winston.format.json(),
-          ),
-        }),
-      ],
+      );
+    }
+
+    this.logger = winston.createLogger({
+      level: logLevel,
+      format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.errors({ stack: true }),
+        winston.format.splat(),
+        winston.format.json(),
+      ),
+      transports,
     });
   }
 

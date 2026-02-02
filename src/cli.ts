@@ -11,6 +11,9 @@ import { DatabaseService } from './modules/storage/database/database.service';
 import * as path from 'path';
 import * as fs from 'fs';
 
+// Suppress console logs in CLI mode (logs still go to file)
+process.env.LUMENTUI_CLI_MODE = '1';
+
 const program = new Command();
 
 /**
@@ -179,7 +182,7 @@ program
     try {
       // Bootstrap NestJS app to get AuthService
       const app = await NestFactory.createApplicationContext(AppModule, {
-        logger: ['error', 'warn'],
+        logger: false,
       });
 
       const authService = app.get(AuthService);

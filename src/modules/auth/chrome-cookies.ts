@@ -90,20 +90,22 @@ export async function getCookiesForUrl(
     const fileBuffer = fs.readFileSync(tempDb);
     const db = new SQL.Database(new Uint8Array(fileBuffer));
 
-    // Parse the URL to get the domain
+    // Parse the URL to get the domain and parent domain
     const parsedUrl = new URL(url);
     const domain = parsedUrl.hostname;
+    const parts = domain.split('.');
+    const parentDomain = parts.length > 2 ? parts.slice(-2).join('.') : domain;
 
-    // Query cookies matching the domain
+    // Query cookies matching the domain or parent domain
     const stmt = db.prepare(
       `
       SELECT name, encrypted_value, host_key, path, expires_utc, is_secure, is_httponly
       FROM cookies
-      WHERE host_key LIKE ? OR host_key LIKE ?
+      WHERE host_key = ? OR host_key = ? OR host_key = ? OR host_key = ?
     `,
     );
 
-    stmt.bind([`%${domain}`, `.${domain}`]);
+    stmt.bind([domain, `.${domain}`, parentDomain, `.${parentDomain}`]);
 
     const rows: any[] = [];
     while (stmt.step()) {
