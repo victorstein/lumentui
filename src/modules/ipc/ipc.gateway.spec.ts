@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { IpcGateway } from './ipc.gateway';
 import * as ipc from 'node-ipc';
 import * as fs from 'fs';
@@ -41,16 +42,31 @@ jest.mock('child_process', () => ({
 describe('IpcGateway', () => {
   let gateway: IpcGateway;
   let module: TestingModule;
+  let configService: any;
 
   beforeEach(async () => {
     // Reset mocks
     jest.clearAllMocks();
 
     module = await Test.createTestingModule({
-      providers: [IpcGateway],
+      providers: [
+        IpcGateway,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, defaultValue: string) => {
+              if (key === 'IPC_SOCKET_PATH') {
+                return '/tmp/lumentui.sock';
+              }
+              return defaultValue;
+            }),
+          },
+        },
+      ],
     }).compile();
 
     gateway = module.get<IpcGateway>(IpcGateway);
+    configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(async () => {

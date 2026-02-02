@@ -4,6 +4,7 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as ipc from 'node-ipc';
 import { existsSync, unlinkSync } from 'fs';
 import { exec } from 'child_process';
@@ -19,8 +20,15 @@ const execAsync = promisify(exec);
 @Injectable()
 export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(IpcGateway.name);
-  private readonly socketPath = '/tmp/lumentui.sock';
+  private readonly socketPath: string;
   private isServerRunning = false;
+
+  constructor(private readonly configService: ConfigService) {
+    this.socketPath = this.configService.get<string>(
+      'IPC_SOCKET_PATH',
+      '/tmp/lumentui.sock',
+    );
+  }
 
   async onModuleInit() {
     await this.startServer();
