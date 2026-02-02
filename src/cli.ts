@@ -202,15 +202,20 @@ program
         const url = 'https://shop.lumenalta.com';
 
         // First attempt: check if cookie already exists
+        let found = false;
         try {
           const cookies = await authService.extractCookies(url);
           await authService.saveCookies(cookies);
+          found = true;
+        } catch {
+          // Cookie not found — will open browser and poll
+        }
+
+        if (found) {
           console.log('✅ Authentication successful!');
           console.log('You can now use: lumentui start');
           await app.close();
           process.exit(0);
-        } catch {
-          // Cookie not found — open browser and poll
         }
 
         // Open browser for the user to authenticate
