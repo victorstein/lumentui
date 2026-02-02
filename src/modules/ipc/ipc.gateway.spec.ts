@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { IpcGateway } from './ipc.gateway';
 import * as ipc from 'node-ipc';
+import * as fs from 'fs';
+import * as child_process from 'child_process';
 
 // Mock node-ipc module
 jest.mock('node-ipc', () => {
@@ -24,6 +26,17 @@ jest.mock('node-ipc', () => {
     server: mockServer,
   };
 });
+
+// Mock fs module
+jest.mock('fs', () => ({
+  existsSync: jest.fn(() => false),
+  unlinkSync: jest.fn(),
+}));
+
+// Mock child_process module
+jest.mock('child_process', () => ({
+  exec: jest.fn(),
+}));
 
 describe('IpcGateway', () => {
   let gateway: IpcGateway;
@@ -49,8 +62,8 @@ describe('IpcGateway', () => {
       expect(gateway).toBeDefined();
     });
 
-    it('should start server on module init', () => {
-      gateway.onModuleInit();
+    it('should start server on module init', async () => {
+      await gateway.onModuleInit();
 
       expect(ipc.serve).toHaveBeenCalledWith(
         '/tmp/lumentui.sock',
@@ -59,26 +72,49 @@ describe('IpcGateway', () => {
       expect(ipc.server.start).toHaveBeenCalled();
     });
 
-    it('should stop server on module destroy', () => {
-      gateway.onModuleInit();
+    it('should stop server on module destroy', async () => {
+      await gateway.onModuleInit();
       gateway.onModuleDestroy();
 
       expect(ipc.server.stop).toHaveBeenCalled();
     });
 
-    it('should setup event handlers', () => {
-      gateway.onModuleInit();
+    it('should setup event handlers', async () => {
+      await gateway.onModuleInit();
 
       expect(ipc.server.on).toHaveBeenCalledWith('connect', expect.any(Function));
       expect(ipc.server.on).toHaveBeenCalledWith('disconnect', expect.any(Function));
       expect(ipc.server.on).toHaveBeenCalledWith('force-poll', expect.any(Function));
       expect(ipc.server.on).toHaveBeenCalledWith('error', expect.any(Function));
     });
+
+    it('should clean up stale socket file on startup', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (child_process.exec as jest.Mock).mockImplementation((cmd, callback) => {
+        // Simulate lsof returning error (socket not in use)
+        callback({ code: 1 }, '', '');
+      });
+
+      await gateway.onModuleInit();
+
+      expect(fs.existsSync).toHaveBeenCalledWith('/tmp/lumentui.sock');
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/lumentui.sock');
+      expect(ipc.server.start).toHaveBeenCalled();
+    });
+
+    it('should clean up socket file on graceful shutdown', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+
+      await gateway.onModuleInit();
+      gateway.onModuleDestroy();
+
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/lumentui.sock');
+    });
   });
 
   describe('Event Emission', () => {
-    beforeEach(() => {
-      gateway.onModuleInit();
+    beforeEach(async () => {
+      await gateway.onModuleInit();
     });
 
     it('should emit heartbeat', () => {
@@ -181,8 +217,8 @@ describe('IpcGateway', () => {
       });
     });
 
-    it('should return status after init', () => {
-      gateway.onModuleInit();
+    it('should return status after init', async () => {
+      await gateway.onModuleInit();
 
       const status = gateway.getStatus();
 
@@ -192,8 +228,8 @@ describe('IpcGateway', () => {
       });
     });
 
-    it('should return status after destroy', () => {
-      gateway.onModuleInit();
+    it('should return status after destroy', async () => {
+      await gateway.onModuleInit();
       gateway.onModuleDestroy();
 
       const status = gateway.getStatus();
@@ -215,9 +251,9 @@ describe('IpcGateway', () => {
       expect(ipc.server.broadcast).not.toHaveBeenCalled();
     });
 
-    it('should not start server twice', () => {
-      gateway.onModuleInit();
-      gateway.onModuleInit();
+    it('should not start server twice', async () => {
+      await gateway.onModuleInit();
+      await gateway.onModuleInit();
 
       // Should only be called once
       expect(ipc.serve).toHaveBeenCalledTimes(1);

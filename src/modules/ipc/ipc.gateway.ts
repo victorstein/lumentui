@@ -5,7 +5,12 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import * as ipc from 'node-ipc';
+import { existsSync, unlinkSync } from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { ProductDto } from '../api/dto/product.dto';
+
+const execAsync = promisify(exec);
 
 /**
  * IPC Gateway using Unix sockets
@@ -17,8 +22,8 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   private readonly socketPath = '/tmp/lumentui.sock';
   private isServerRunning = false;
 
-  onModuleInit() {
-    this.startServer();
+  async onModuleInit() {
+    await this.startServer();
   }
 
   onModuleDestroy() {
@@ -28,11 +33,14 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   /**
    * Start Unix socket server
    */
-  private startServer(): void {
+  private async startServer(): Promise<void> {
     if (this.isServerRunning) {
       this.logger.warn('IPC server already running');
       return;
     }
+
+    // Clean up stale socket file before starting
+    await this.cleanupStaleSocket();
 
     // Configure node-ipc
     ipc.config.id = 'lumentui-daemon';
@@ -51,7 +59,59 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Stop Unix socket server
+   * Clean up stale socket file from previous crash/ungraceful shutdown
+   * Checks if socket file exists and if any process is actually using it
+   */
+  private async cleanupStaleSocket(): Promise<void> {
+    if (!existsSync(this.socketPath)) {
+      // No socket file exists, nothing to clean up
+      return;
+    }
+
+    this.logger.log('Socket file exists, checking if stale...');
+
+    try {
+      // Check if any process is listening on this socket using lsof
+      // lsof returns exit code 0 if file is open, non-zero if not
+      await execAsync(`lsof ${this.socketPath}`);
+      
+      // If we reach here, the socket is in use by another process
+      this.logger.warn(
+        'Socket file is in use by another process. Cannot start server.',
+      );
+      throw new Error(
+        `IPC socket ${this.socketPath} is already in use by another process`,
+      );
+    } catch (error: any) {
+      // lsof returns non-zero exit code if socket is not in use
+      // This means the socket file is stale (no process listening)
+      if (error.code === 1 || error.message?.includes('No such')) {
+        this.logger.log('Removing stale socket file');
+        try {
+          unlinkSync(this.socketPath);
+          this.logger.log('Stale socket file removed successfully');
+        } catch (unlinkError) {
+          this.logger.error(
+            `Failed to remove stale socket file: ${unlinkError.message}`,
+          );
+          throw unlinkError;
+        }
+      } else {
+        // Some other error occurred (e.g., lsof not found, permission denied)
+        this.logger.error(`Error checking socket status: ${error.message}`);
+        // Attempt to remove socket anyway
+        try {
+          unlinkSync(this.socketPath);
+          this.logger.log('Socket file removed (lsof check failed)');
+        } catch {
+          // Ignore if removal fails
+        }
+      }
+    }
+  }
+
+  /**
+   * Stop Unix socket server and clean up socket file
    */
   private stopServer(): void {
     if (!this.isServerRunning) {
@@ -60,6 +120,16 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
 
     ipc.server.stop();
     this.isServerRunning = false;
+
+    // Clean up socket file on graceful shutdown
+    if (existsSync(this.socketPath)) {
+      try {
+        unlinkSync(this.socketPath);
+        this.logger.log('Socket file cleaned up');
+      } catch (error: any) {
+        this.logger.warn(`Failed to clean up socket file: ${error.message}`);
+      }
+    }
 
     this.logger.log('IPC server stopped');
   }
