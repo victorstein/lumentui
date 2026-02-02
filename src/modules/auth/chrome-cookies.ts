@@ -50,6 +50,18 @@ export function decryptValue(encryptedValue: Buffer, key: Buffer): string {
     let decrypted = decipher.update(data);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
 
+    // Chrome DB version >= 24 prepends a 32-byte SHA256 hash of host_key
+    // before the actual value. Detect by checking if first 32 bytes are
+    // non-printable (binary hash) and remaining bytes are printable.
+    if (decrypted.length > 32) {
+      const afterHash = decrypted.slice(32);
+      const afterHashStr = afterHash.toString('utf8');
+      // If stripping 32 bytes yields printable text, it's the v24+ format
+      if (/^[\x20-\x7E]*$/.test(afterHashStr) && afterHashStr.length > 0) {
+        return afterHashStr;
+      }
+    }
+
     return decrypted.toString('utf8');
   } catch {
     return '';

@@ -22,20 +22,30 @@ export class AuthService {
       const profile =
         this.configService.get<string>('CHROME_PROFILE') || 'Default';
 
-      // Extract cookies from Chrome using sql.js
+      // Extract cookies from Chrome
       const cookies = await getCookiesForUrl(url, profile);
 
-      // Filter for storefront_digest cookie
-      const digestCookie = cookies.find((c) => c.name === 'storefront_digest');
+      // Filter for Shopify session cookies needed for authenticated access
+      const sessionCookieNames = [
+        '_shopify_essential',
+        '_shopify_y',
+        'storefront_digest',
+      ];
+      const sessionCookies = cookies.filter((c) =>
+        sessionCookieNames.includes(c.name),
+      );
 
-      if (!digestCookie) {
+      if (sessionCookies.length === 0) {
         throw new AuthException(
           'Authentication cookie not found. Please log in to shop.lumenalta.com in Chrome first.',
         );
       }
 
-      this.logger.log('Cookie extracted successfully', 'AuthService');
-      return [digestCookie];
+      this.logger.log(
+        `Extracted ${sessionCookies.length} cookie(s): ${sessionCookies.map((c) => c.name).join(', ')}`,
+        'AuthService',
+      );
+      return sessionCookies;
     } catch (error) {
       this.logger.error(
         'Failed to extract cookies',
