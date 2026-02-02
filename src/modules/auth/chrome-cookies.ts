@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 
-interface ChromeCookie {
+export interface ChromeCookie {
   name: string;
   value: string;
   domain: string;
@@ -65,6 +65,43 @@ export function getChromeDbPath(profile: string = 'Default'): string {
   );
 }
 
+/**
+ * Copy Chrome's cookie DB + WAL files to a temp directory.
+ * Chrome uses WAL mode, so we need all three files for a consistent read.
+ */
+function copyDbToTemp(cookieDbPath: string): string {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumentui-cookies-'));
+  const tempDb = path.join(tempDir, 'Cookies');
+
+  fs.copyFileSync(cookieDbPath, tempDb);
+
+  // Copy WAL and SHM files if they exist (Chrome uses WAL mode)
+  const walPath = cookieDbPath + '-wal';
+  const shmPath = cookieDbPath + '-shm';
+  if (fs.existsSync(walPath)) {
+    fs.copyFileSync(walPath, tempDb + '-wal');
+  }
+  if (fs.existsSync(shmPath)) {
+    fs.copyFileSync(shmPath, tempDb + '-shm');
+  }
+
+  return tempDb;
+}
+
+/**
+ * Clean up temp DB directory
+ */
+function cleanupTemp(tempDb: string): void {
+  try {
+    const dir = path.dirname(tempDb);
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {}
+}
+
+/**
+ * Query Chrome cookie DB for cookies matching a URL.
+ * Returns all matching cookies (not just storefront_digest).
+ */
 export async function getCookiesForUrl(
   url: string,
   profile?: string,
@@ -77,15 +114,13 @@ export async function getCookiesForUrl(
     );
   }
 
-  // Copy the DB to a temp file to avoid locking issues with Chrome
-  const tempDb = path.join(os.tmpdir(), `lumentui-cookies-${Date.now()}.db`);
-  fs.copyFileSync(cookieDbPath, tempDb);
+  const tempDb = copyDbToTemp(cookieDbPath);
 
   try {
     const password = getChromePassword();
     const key = deriveKey(password);
 
-    // Initialize sql.js
+    // Initialize sql.js and open the copied DB with WAL support
     const SQL = await initSqlJs();
     const fileBuffer = fs.readFileSync(tempDb);
     const db = new SQL.Database(new Uint8Array(fileBuffer));
@@ -97,51 +132,53 @@ export async function getCookiesForUrl(
     const parentDomain = parts.length > 2 ? parts.slice(-2).join('.') : domain;
 
     // Query cookies matching the domain or parent domain
-    const stmt = db.prepare(
+    const results = db.exec(
       `
       SELECT name, encrypted_value, host_key, path, expires_utc, is_secure, is_httponly
       FROM cookies
-      WHERE host_key = ? OR host_key = ? OR host_key = ? OR host_key = ?
+      WHERE host_key IN (?, ?, ?, ?)
     `,
+      [domain, `.${domain}`, parentDomain, `.${parentDomain}`],
     );
-
-    stmt.bind([domain, `.${domain}`, parentDomain, `.${parentDomain}`]);
-
-    const rows: any[] = [];
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject());
-    }
-    stmt.free();
 
     db.close();
 
-    return rows.map((row) => {
-      const encVal = row.encrypted_value;
+    if (!results.length || !results[0].values.length) {
+      return [];
+    }
+
+    const columns = results[0].columns;
+    const nameIdx = columns.indexOf('name');
+    const encIdx = columns.indexOf('encrypted_value');
+    const hostIdx = columns.indexOf('host_key');
+    const pathIdx = columns.indexOf('path');
+    const expiresIdx = columns.indexOf('expires_utc');
+    const secureIdx = columns.indexOf('is_secure');
+    const httpOnlyIdx = columns.indexOf('is_httponly');
+
+    return results[0].values.map((row) => {
+      const encVal = row[encIdx];
       const value = decryptValue(
         Buffer.from(encVal instanceof Uint8Array ? encVal : []),
         key,
       );
-      const expiresUtc = Number(row.expires_utc);
-      // Convert Chrome epoch (microseconds since 1601) to Unix epoch (seconds since 1970)
+      const expiresUtc = Number(row[expiresIdx]);
       const expires =
         expiresUtc > 0
           ? Math.floor(expiresUtc / 1000000) - CHROME_EPOCH_OFFSET
           : 0;
 
       return {
-        name: row.name as string,
+        name: row[nameIdx] as string,
         value,
-        domain: row.host_key as string,
-        path: row.path as string,
+        domain: row[hostIdx] as string,
+        path: row[pathIdx] as string,
         expires,
-        httpOnly: !!row.is_httponly,
-        secure: !!row.is_secure,
+        httpOnly: !!row[httpOnlyIdx],
+        secure: !!row[secureIdx],
       };
     });
   } finally {
-    // Clean up temp file
-    try {
-      fs.unlinkSync(tempDb);
-    } catch {}
+    cleanupTemp(tempDb);
   }
 }
