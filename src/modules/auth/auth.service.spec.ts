@@ -125,15 +125,25 @@ describe('AuthService', () => {
   describe('saveCookies', () => {
     it('should save cookies to storage', async () => {
       const mockCookies = [
-        { name: 'cookie1', value: 'value1' },
-        { name: 'cookie2', value: 'value2' },
+        {
+          name: 'cookie1',
+          value: 'value1',
+          domain: 'test.com',
+          path: '/',
+          expires: Date.now() / 1000 + 3600,
+        },
+        {
+          name: 'cookie2',
+          value: 'value2',
+          domain: 'test.com',
+          path: '/',
+          expires: Date.now() / 1000 + 3600,
+        },
       ];
 
       await service.saveCookies(mockCookies as any);
 
-      expect(cookieStorageService.saveCookies).toHaveBeenCalledWith(
-        'cookie1=value1; cookie2=value2',
-      );
+      expect(cookieStorageService.saveCookies).toHaveBeenCalledWith(mockCookies);
       expect(loggerService.log).toHaveBeenCalledWith(
         'Cookies saved successfully',
         'AuthService',
@@ -155,15 +165,25 @@ describe('AuthService', () => {
 
   describe('loadCookies', () => {
     it('should load cookies from storage', async () => {
+      const mockCookies = [
+        {
+          name: 'test-cookie',
+          value: 'test-value',
+          domain: 'test.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1000) + 3600, // Not expired (1 hour in future)
+        },
+      ];
+
       (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
-        'test-cookie=test-value',
+        mockCookies,
       );
 
       const result = await service.loadCookies();
 
       expect(result).toBe('test-cookie=test-value');
       expect(loggerService.log).toHaveBeenCalledWith(
-        'Cookies loaded successfully',
+        'Cookies loaded and validated successfully',
         'AuthService',
       );
     });
@@ -176,24 +196,88 @@ describe('AuthService', () => {
     });
 
     it('should throw error when cookies are expired', async () => {
-      // Mock a cookie with expiration timestamp
-      const expiredCookieHeader = 'storefront_digest=expired-value';
+      const expiredCookie = [
+        {
+          name: 'storefront_digest',
+          value: 'expired-value',
+          domain: 'shop.lumenalta.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
+        },
+      ];
+
       (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
-        expiredCookieHeader,
+        expiredCookie,
       );
 
-      // Note: With current implementation, expires is always 0 from parseCookieHeader
-      // So this test would need full Cookie objects to properly test expiration
-      // For now, we test the happy path
+      await expect(service.loadCookies()).rejects.toThrow(AuthException);
+      await expect(service.loadCookies()).rejects.toThrow('Session expired');
+      expect(loggerService.warn).toHaveBeenCalledWith(
+        expect.stringContaining('expired'),
+        'AuthService',
+      );
+    });
+
+    it('should handle multiple cookies with some expired', async () => {
+      const mockCookies = [
+        {
+          name: 'valid-cookie',
+          value: 'value1',
+          domain: 'test.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1000) + 3600, // Valid
+        },
+        {
+          name: 'expired-cookie',
+          value: 'value2',
+          domain: 'test.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1000) - 3600, // Expired
+        },
+      ];
+
+      (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
+        mockCookies,
+      );
+
+      await expect(service.loadCookies()).rejects.toThrow(AuthException);
+      await expect(service.loadCookies()).rejects.toThrow('Session expired');
+    });
+
+    it('should handle cookies with no expiration (expires = 0)', async () => {
+      const nonExpiringCookie = [
+        {
+          name: 'session-cookie',
+          value: 'value',
+          domain: 'test.com',
+          path: '/',
+          expires: 0, // Session cookie, no expiration
+        },
+      ];
+
+      (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
+        nonExpiringCookie,
+      );
+
       const result = await service.loadCookies();
-      expect(result).toBe(expiredCookieHeader);
+      expect(result).toBe('session-cookie=value');
     });
   });
 
   describe('validateCookies', () => {
     it('should return true when cookies exist', async () => {
+      const mockCookies = [
+        {
+          name: 'test',
+          value: 'value',
+          domain: 'test.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1000) + 3600,
+        },
+      ];
+
       (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
-        'test=value',
+        mockCookies,
       );
 
       const result = await service.validateCookies();
@@ -203,6 +287,26 @@ describe('AuthService', () => {
 
     it('should return false when no cookies exist', async () => {
       (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(null);
+
+      const result = await service.validateCookies();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false when cookies are expired', async () => {
+      const expiredCookie = [
+        {
+          name: 'test',
+          value: 'value',
+          domain: 'test.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1000) - 3600,
+        },
+      ];
+
+      (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
+        expiredCookie,
+      );
 
       const result = await service.validateCookies();
 

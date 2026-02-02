@@ -73,13 +73,8 @@ export class AuthService {
     this.logger.log('Saving cookies to storage', 'AuthService');
 
     try {
-      // Convert cookies to Cookie header format
-      const cookieHeader = cookies
-        .map((c) => `${c.name}=${c.value}`)
-        .join('; ');
-
-      // FIX #2: Use CookieStorageService instead of process.env
-      this.cookieStorage.saveCookies(cookieHeader);
+      // Store full Cookie objects with expiration metadata
+      this.cookieStorage.saveCookies(cookies);
 
       this.logger.log('Cookies saved successfully', 'AuthService');
     } catch (error) {
@@ -92,20 +87,19 @@ export class AuthService {
     this.logger.log('Loading cookies from storage', 'AuthService');
 
     try {
-      // FIX #2: Use CookieStorageService
-      const cookieHeader = this.cookieStorage.loadCookies();
+      // Load full Cookie objects with expiration metadata
+      const cookies = this.cookieStorage.loadCookies();
 
-      if (!cookieHeader) {
+      if (!cookies || cookies.length === 0) {
         throw new AuthException('No cookies found. Please run: lumentui auth');
       }
 
-      // FIX #1: Validar expiración antes de retornar
-      const cookies = this.parseCookieHeader(cookieHeader);
+      // Validate cookie expiration
       const expiredCookies = cookies.filter((c) => this.isCookieExpired(c));
 
       if (expiredCookies.length > 0) {
         this.logger.warn(
-          'Cookies expired, re-authentication required',
+          `${expiredCookies.length} cookie(s) expired, re-authentication required`,
           'AuthService',
         );
         throw new AuthException(
@@ -113,7 +107,12 @@ export class AuthService {
         );
       }
 
-      this.logger.log('Cookies loaded successfully', 'AuthService');
+      // Convert to Cookie header format for API calls
+      const cookieHeader = cookies
+        .map((c) => `${c.name}=${c.value}`)
+        .join('; ');
+
+      this.logger.log('Cookies loaded and validated successfully', 'AuthService');
       return cookieHeader;
     } catch (error) {
       if (error instanceof AuthException) {
@@ -125,28 +124,20 @@ export class AuthService {
     }
   }
 
-  // FIX #1: Agregar método helper para parsear cookie header
-  private parseCookieHeader(cookieHeader: string): Cookie[] {
-    // Parse "name1=value1; name2=value2" → Cookie[]
-    const parts = cookieHeader.split('; ');
-    return parts.map((part) => {
-      const [name, value] = part.split('=');
-      // Note: expires is not stored in the cookie header format
-      // For full expiration validation, we need to store full Cookie objects
-      // For now, return a minimal Cookie object with expires: 0 (never expires)
-      return {
-        name,
-        value,
-        domain: '',
-        path: '/',
-        expires: 0, // No expiration info available from header format
-      } as Cookie;
-    });
-  }
-
+  /**
+   * Check if a cookie is expired
+   * @param cookie Cookie object
+   * @returns true if cookie is expired, false otherwise
+   */
   private isCookieExpired(cookie: Cookie): boolean {
-    if (!cookie.expires) return false;
-    return cookie.expires < Date.now() / 1000;
+    // If expires is 0 or not set, cookie doesn't expire
+    if (!cookie.expires || cookie.expires === 0) {
+      return false;
+    }
+    
+    // expires is in seconds since epoch, compare with current time
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    return cookie.expires < nowInSeconds;
   }
 
   async validateCookies(): Promise<boolean> {

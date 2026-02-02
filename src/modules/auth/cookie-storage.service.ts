@@ -5,12 +5,32 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { machineIdSync } from 'node-machine-id';
+import { Cookie } from './interfaces/cookie.interface';
+
+/**
+ * Cookie storage data structure with metadata
+ */
+interface CookieStorageData {
+  version: number;
+  cookies: Array<{
+    name: string;
+    value: string;
+    domain: string;
+    path: string;
+    expires: number;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: string;
+  }>;
+  storedAt: number;
+}
 
 @Injectable()
 export class CookieStorageService {
   private readonly STORAGE_DIR = join(homedir(), '.lumentui');
   private readonly COOKIE_FILE = join(this.STORAGE_DIR, 'cookies.enc');
   private readonly ALGORITHM = 'aes-256-gcm';
+  private readonly STORAGE_VERSION = 2; // Version 2: stores full Cookie objects
 
   constructor(private readonly configService: ConfigService) {
     // Ensure storage directory exists
@@ -25,12 +45,32 @@ export class CookieStorageService {
     return Buffer.from(machineId.padEnd(32, '0').slice(0, 32));
   }
 
-  saveCookies(cookieHeader: string): void {
+  /**
+   * Save cookies with full metadata including expiration
+   * @param cookies Array of Cookie objects
+   */
+  saveCookies(cookies: Cookie[]): void {
+    const cookieData: CookieStorageData = {
+      version: this.STORAGE_VERSION,
+      cookies: cookies.map((c) => ({
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path,
+        expires: c.expires || 0, // Default to 0 (session cookie) if undefined
+        httpOnly: c.httpOnly,
+        secure: c.secure,
+        sameSite: c.sameSite,
+      })),
+      storedAt: Date.now(),
+    };
+
+    const plaintext = JSON.stringify(cookieData);
     const key = this.getEncryptionKey();
     const iv = randomBytes(16);
     const cipher = createCipheriv(this.ALGORITHM, key, iv);
 
-    let encrypted = cipher.update(cookieHeader, 'utf8', 'hex');
+    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
     encrypted += cipher.final('hex');
 
     const authTag = cipher.getAuthTag();
@@ -45,7 +85,11 @@ export class CookieStorageService {
     writeFileSync(this.COOKIE_FILE, JSON.stringify(data), { mode: 0o600 });
   }
 
-  loadCookies(): string | null {
+  /**
+   * Load cookies with full metadata
+   * Returns null if no cookies stored or decryption fails
+   */
+  loadCookies(): Cookie[] | null {
     if (!existsSync(this.COOKIE_FILE)) {
       return null;
     }
@@ -62,9 +106,34 @@ export class CookieStorageService {
       let decrypted = decipher.update(stored.data, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
 
-      return decrypted;
+      // Check if this is the new format (v2) or old format (v1)
+      const parsed = JSON.parse(decrypted);
+      
+      if (parsed.version === this.STORAGE_VERSION) {
+        // New format with full Cookie objects
+        return parsed.cookies as Cookie[];
+      } else if (typeof parsed === 'string' || !parsed.version) {
+        // Old format (v1): just a cookie header string
+        // Return null to force re-authentication
+        return null;
+      }
+
+      return parsed.cookies as Cookie[];
     } catch (error) {
       return null;
     }
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   * Converts cookies to Cookie header format
+   */
+  loadCookieHeader(): string | null {
+    const cookies = this.loadCookies();
+    if (!cookies || cookies.length === 0) {
+      return null;
+    }
+    
+    return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
   }
 }
