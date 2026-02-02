@@ -148,6 +148,84 @@ describe('NotificationService', () => {
         'NotificationService',
       );
     });
+
+    it('should rebuild rate limit cache from database on initialization', async () => {
+      const recentNotifications = [
+        { product_id: 'prod1', last_sent: Date.now() - 30 * 60 * 1000 }, // 30 min ago
+        { product_id: 'prod2', last_sent: Date.now() - 10 * 60 * 1000 }, // 10 min ago
+      ];
+
+      mockDbAll.mockReturnValue(recentNotifications);
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          NotificationService,
+          {
+            provide: ConfigService,
+            useValue: mockConfigService,
+          },
+          {
+            provide: LoggerService,
+            useValue: mockLoggerService,
+          },
+          {
+            provide: DatabaseService,
+            useValue: mockDatabaseService,
+          },
+        ],
+      }).compile();
+
+      const testService = module.get<NotificationService>(NotificationService);
+      await testService.onModuleInit();
+
+      expect(mockDbPrepare).toHaveBeenCalled();
+      expect(mockDbAll).toHaveBeenCalledWith(expect.any(Number));
+      expect(mockLoggerService.log).toHaveBeenCalledWith(
+        expect.stringContaining('Rate limit cache rebuilt with 2 entries'),
+        'NotificationService',
+      );
+
+      // Verify cache is actually populated (products should be rate limited)
+      const status1 = testService.getRateLimitStatus('prod1');
+      const status2 = testService.getRateLimitStatus('prod2');
+
+      expect(status1.isLimited).toBe(true);
+      expect(status2.isLimited).toBe(true);
+    });
+
+    it('should handle database errors during cache rebuild gracefully', async () => {
+      mockDbPrepare.mockImplementation(() => {
+        throw new Error('Database connection failed');
+      });
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          NotificationService,
+          {
+            provide: ConfigService,
+            useValue: mockConfigService,
+          },
+          {
+            provide: LoggerService,
+            useValue: mockLoggerService,
+          },
+          {
+            provide: DatabaseService,
+            useValue: mockDatabaseService,
+          },
+        ],
+      }).compile();
+
+      const testService = module.get<NotificationService>(NotificationService);
+      
+      // Should not throw, just log error
+      await expect(testService.onModuleInit()).resolves.not.toThrow();
+      
+      expect(mockLoggerService.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to rebuild rate limit cache'),
+        'NotificationService',
+      );
+    });
   });
 
   describe('sendAvailabilityNotification', () => {

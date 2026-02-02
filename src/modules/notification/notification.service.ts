@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -15,7 +15,7 @@ const execAsync = promisify(exec);
 const RATE_LIMIT_MINUTES = 60;
 
 @Injectable()
-export class NotificationService {
+export class NotificationService implements OnModuleInit {
   private readonly notificationCache: Map<string, number> = new Map();
   private readonly defaultPhoneNumber: string;
 
@@ -32,6 +32,13 @@ export class NotificationService {
         'NotificationService',
       );
     }
+  }
+
+  /**
+   * Initialize service and rebuild rate limit cache from database
+   */
+  async onModuleInit() {
+    this.rebuildRateLimitCache();
   }
 
   /**
@@ -221,6 +228,51 @@ export class NotificationService {
         'NotificationService',
       );
       return [];
+    }
+  }
+
+  /**
+   * Rebuild rate limit cache from database
+   * Called on module initialization to restore state after restart
+   */
+  private rebuildRateLimitCache(): void {
+    try {
+      const db = this.databaseService.getDatabase();
+
+      // Calculate timestamp threshold (current time - rate limit window)
+      const rateLimitThreshold =
+        Date.now() - RATE_LIMIT_MINUTES * 60 * 1000;
+
+      // Get last successful notification for each product within rate limit window
+      const recentNotifications = db
+        .prepare(
+          `
+          SELECT product_id, MAX(timestamp) as last_sent
+          FROM notifications
+          WHERE sent = 1 AND timestamp > ?
+          GROUP BY product_id
+        `,
+        )
+        .all(rateLimitThreshold) as Array<{
+        product_id: string;
+        last_sent: number;
+      }>;
+
+      // Rebuild cache
+      this.notificationCache.clear();
+      for (const row of recentNotifications) {
+        this.notificationCache.set(row.product_id, row.last_sent);
+      }
+
+      this.logger.log(
+        `Rate limit cache rebuilt with ${recentNotifications.length} entries`,
+        'NotificationService',
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to rebuild rate limit cache: ${error.message}`,
+        'NotificationService',
+      );
     }
   }
 
