@@ -336,9 +336,9 @@ git commit -m "fix(api): handle 429 rate limit errors"
 git commit -m "docs(readme): update installation instructions"
 
 # With body and footer
-git commit -m "feat(notification): add WhatsApp integration
+git commit -m "feat(notification): add macOS notification integration
 
-Integrated Clawdbot for WhatsApp notifications.
+Integrated node-notifier for macOS native notifications.
 Includes rate limiting (1 notification per hour per product).
 
 Closes #42"

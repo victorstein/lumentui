@@ -153,11 +153,7 @@ export class SchedulerService implements OnModuleInit {
       }
 
       // Send notifications for new products
-      const phoneNumber =
-        this.configService.get<string>('LUMENTUI_NOTIFICATION_PHONE') ||
-        process.env.LUMENTUI_NOTIFICATION_PHONE;
-
-      if (newProductList.length > 0 && phoneNumber) {
+      if (newProductList.length > 0) {
         this.logger.log(
           `Processing notifications for ${newProductList.length} new products`,
           'SchedulerService',
@@ -169,12 +165,10 @@ export class SchedulerService implements OnModuleInit {
             if (this.notificationService.shouldNotify(newProduct)) {
               await this.notificationService.sendAvailabilityNotification(
                 newProduct,
-                phoneNumber,
               );
             } else {
               this.logger.log(
                 `Product ${newProduct.id} filtered out by notification rules`,
-                'SchedulerService',
               );
             }
           } catch (error) {
@@ -186,11 +180,6 @@ export class SchedulerService implements OnModuleInit {
             );
           }
         }
-      } else if (newProductList.length > 0 && !phoneNumber) {
-        this.logger.warn(
-          'New products detected but LUMENTUI_NOTIFICATION_PHONE is not set - skipping notifications',
-          'SchedulerService',
-        );
       }
 
       const durationMs = Date.now() - startTime;

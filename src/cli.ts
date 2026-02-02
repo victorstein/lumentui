@@ -18,46 +18,6 @@ const program = new Command();
  */
 class CliValidator {
   /**
-   * Validate phone number format (E.164)
-   * @param phone Phone number string
-   * @returns true if valid, error message if invalid
-   */
-  static validatePhoneNumber(phone: string): {
-    valid: boolean;
-    error?: string;
-  } {
-    if (!phone) {
-      return { valid: true }; // Optional field
-    }
-
-    if (!phone.startsWith('+')) {
-      return {
-        valid: false,
-        error:
-          'Phone number must start with + (E.164 format, e.g., +50586826131)',
-      };
-    }
-
-    // Remove + and check if remaining chars are digits
-    const digits = phone.slice(1);
-    if (!/^\d+$/.test(digits)) {
-      return {
-        valid: false,
-        error: 'Phone number must contain only digits after + symbol',
-      };
-    }
-
-    if (digits.length < 7 || digits.length > 15) {
-      return {
-        valid: false,
-        error: 'Phone number must be between 7 and 15 digits',
-      };
-    }
-
-    return { valid: true };
-  }
-
-  /**
    * Validate numeric environment variable
    * @param value String value from env
    * @param name Variable name
@@ -150,15 +110,6 @@ class CliValidator {
    */
   static validateEnvironment(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
-
-    // Validate phone number
-    const phoneNumber = process.env.NOTIFICATION_PHONE;
-    if (phoneNumber) {
-      const phoneResult = this.validatePhoneNumber(phoneNumber);
-      if (!phoneResult.valid) {
-        errors.push(`NOTIFICATION_PHONE: ${phoneResult.error}`);
-      }
-    }
 
     // Validate poll interval
     const pollInterval = process.env.LUMENTUI_POLL_INTERVAL;
@@ -631,11 +582,6 @@ class ConfigManager {
       sensitive?: boolean;
     }
   > = {
-    LUMENTUI_NOTIFICATION_PHONE: {
-      description: 'WhatsApp notification phone number (E.164 format)',
-      validator: (value) => CliValidator.validatePhoneNumber(value),
-      sensitive: true,
-    },
     LUMENTUI_POLL_INTERVAL: {
       description: 'Polling interval in seconds',
       validator: (value) =>
@@ -656,11 +602,6 @@ class ConfigManager {
     },
     LUMENTUI_SHOP_URL: {
       description: 'Shopify shop URL',
-    },
-    NOTIFICATION_PHONE: {
-      description: 'WhatsApp notification phone number (E.164 format)',
-      validator: (value) => CliValidator.validatePhoneNumber(value),
-      sensitive: true,
     },
     SHOPIFY_TIMEOUT_MS: {
       description: 'API timeout in milliseconds',

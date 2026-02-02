@@ -11,11 +11,11 @@ Ink TUI specialist for building terminal user interfaces with React.
 
 ## Tech Stack
 
-| Component      | Technology         |
-| -------------- | ------------------ |
-| TUI Framework  | Ink 5              |
-| React          | React 18           |
-| IPC Client     | node-ipc           |
+| Component     | Technology |
+| ------------- | ---------- |
+| TUI Framework | Ink 5      |
+| React         | React 18   |
+| IPC Client    | node-ipc   |
 
 ## Project Structure
 

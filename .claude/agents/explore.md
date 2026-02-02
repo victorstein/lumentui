@@ -32,7 +32,7 @@ src/
 │   ├── storage/            # SQLite via better-sqlite3
 │   ├── scheduler/          # @Cron polling + orchestration
 │   ├── differ/             # Product diff comparison
-│   ├── notification/       # WhatsApp notifications via Clawdbot
+│   ├── notification/       # macOS notifications via node-notifier
 │   └── ipc/                # Unix socket server (node-ipc)
 └── ui/                     # Ink TUI (React 18)
     ├── App.tsx             # Root component

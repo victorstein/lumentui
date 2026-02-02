@@ -142,7 +142,7 @@ describe('LumenTUI E2E Integration Tests', () => {
               DB_PATH: TEST_DB_PATH,
               DATABASE_PATH: TEST_DB_PATH,
               NODE_ENV: 'test',
-              NOTIFICATION_PHONE: '+50586826131', // Test phone
+              NOTIFICATION_ENABLED: 'true',
               POLL_INTERVAL: '*/30 * * * *',
             }),
           ],
@@ -252,9 +252,9 @@ describe('LumenTUI E2E Integration Tests', () => {
       expect(polls[0].success).toBe(1);
       expect(polls[0].product_count).toBe(1);
 
-      // Note: Notification tests skipped due to mock complexity with promisify(exec)
+      // Note: Notification tests use mocked implementation
       // Notification service is tested separately in unit tests
-      // Integration with real clawdbot CLI tested in manual testing phase
+      // Integration with real node-notifier tested in manual testing phase
     }, 15000); // 15 second timeout for integration test
 
     it('should handle multiple products in single poll', async () => {
@@ -509,7 +509,7 @@ describe('LumenTUI E2E Integration Tests', () => {
       await schedulerService.handlePoll();
     });
 
-    // Note: Notification tests with clawdbot CLI mocking are complex with promisify(exec)
+    // Note: Notification tests with node-notifier are covered by unit tests
     // These are covered by unit tests and manual testing phase
     it.skip('should enforce rate limiting for same product', async () => {
       // Tested in unit tests

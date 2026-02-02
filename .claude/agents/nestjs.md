@@ -11,16 +11,16 @@ NestJS backend specialist for LumenTUI daemon modules.
 
 ## Tech Stack
 
-| Component  | Technology                      |
-| ---------- | ------------------------------- |
-| Framework  | NestJS 11                       |
-| Scheduling | @nestjs/schedule (cron jobs)    |
-| HTTP       | @nestjs/axios + axios-retry     |
-| Database   | better-sqlite3 (SQLite)         |
-| Config     | @nestjs/config                  |
-| Auth       | chrome-cookies-secure           |
-| IPC        | node-ipc (Unix socket)          |
-| CLI        | Commander.js                    |
+| Component  | Technology                   |
+| ---------- | ---------------------------- |
+| Framework  | NestJS 11                    |
+| Scheduling | @nestjs/schedule (cron jobs) |
+| HTTP       | @nestjs/axios + axios-retry  |
+| Database   | better-sqlite3 (SQLite)      |
+| Config     | @nestjs/config               |
+| Auth       | chrome-cookies-secure        |
+| IPC        | node-ipc (Unix socket)       |
+| CLI        | Commander.js                 |
 
 ## Project Structure
 
@@ -31,7 +31,7 @@ src/modules/
 ├── storage/       # SQLite database, entities, migrations
 ├── scheduler/     # @Cron polling orchestration, forcePoll()
 ├── differ/        # Product comparison (new/updated detection)
-├── notification/  # WhatsApp notifications via Clawdbot CLI
+├── notification/  # macOS notifications via node-notifier
 └── ipc/           # Unix socket server, emit methods, lifecycle
 ```
 

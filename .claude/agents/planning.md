@@ -122,12 +122,12 @@ Parse the draft plan from the prompt and create the beads hierarchy.
 
 ## Agent Labels
 
-| Label         | Agent        | Covers                                          |
-| ------------- | ------------ | ----------------------------------------------- |
-| `nestjs`      | @nestjs      | Modules, services, DI, database, CLI, build     |
-| `daemon`      | @daemon      | Scheduler, differ, IPC gateway, notifications   |
-| `ink`         | @ink         | TUI components, hooks, theme                    |
-| `code-review` | @code-review | Quality review before commits                   |
+| Label         | Agent        | Covers                                        |
+| ------------- | ------------ | --------------------------------------------- |
+| `nestjs`      | @nestjs      | Modules, services, DI, database, CLI, build   |
+| `daemon`      | @daemon      | Scheduler, differ, IPC gateway, notifications |
+| `ink`         | @ink         | TUI components, hooks, theme                  |
+| `code-review` | @code-review | Quality review before commits                 |
 
 ---
 

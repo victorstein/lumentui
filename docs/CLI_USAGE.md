@@ -23,7 +23,7 @@ Complete guide for using the LumentuiAPI command-line interface.
 ### Local Installation
 
 ```bash
-cd ~/clawd/development/lumentui/lumentui
+cd $HOME/development/lumentui
 npm install
 npm run build
 ```
@@ -323,7 +323,7 @@ Database:
   Size:             2.1 MB
   Products:         42
 
-Notifications:
+macOS Notifications:
   Sent Today:       3
   Last Notification: 1h 23m ago
 ```
@@ -590,7 +590,7 @@ lumentui config --list
 
 Shop URL:          https://shop.lumenalta.com
 Poll Interval:     30 minutes
-Notification Phone: +50586826131
+Notifications:     Enabled (macOS)
 Database Path:     data/lumentui.db
 Log Level:         info
 Log File:          data/logs/app.log
@@ -658,7 +658,7 @@ lumentui logs -f
 [2025-01-21 15:30:02] [DEBUG] Fetching from Shopify API
 [2025-01-21 15:30:03] [INFO] Found 42 products
 [2025-01-21 15:30:03] [INFO] 2 new products detected
-[2025-01-21 15:30:04] [INFO] Notification sent: +50586826131
+[2025-01-21 15:30:04] [INFO] macOS notification sent
 ```
 
 #### Last N Lines
@@ -710,7 +710,7 @@ lumentui doctor
 ✅ Node.js version: v18.17.0 (OK)
 ✅ npm version: 9.8.1 (OK)
 ✅ Chrome installed: Yes
-✅ Clawdbot available: Yes
+✅ node-notifier available: Yes
 ✅ Database accessible: Yes
 ✅ Cookies file exists: Yes
 ✅ Cookies valid: Yes
@@ -828,7 +828,7 @@ fi
 
 ```bash
 # Install and configure
-cd ~/clawd/development/lumentui/lumentui
+cd $HOME/development/lumentui
 npm install
 npm run build
 

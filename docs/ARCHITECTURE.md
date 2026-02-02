@@ -47,8 +47,8 @@ Comprehensive architectural overview of the LumentuiAPI NestJS application.
         ┌────────────┼────────────┐
         ▼            ▼            ▼
    ┌─────────┐  ┌─────────┐  ┌─────────┐
-   │ SQLite  │  │ Chrome  │  │Clawdbot │
-   │   DB    │  │Keychain │  │  API    │
+   │ SQLite  │  │ Chrome  │  │ macOS   │
+   │   DB    │  │Keychain │  │ Notify  │
    └─────────┘  └─────────┘  └─────────┘
 ```
 
@@ -62,7 +62,7 @@ Comprehensive architectural overview of the LumentuiAPI NestJS application.
 | **ApiModule**          | Shopify API integration               | Axios, axios-retry    |
 | **StorageModule**      | Data persistence                      | better-sqlite3        |
 | **SchedulerModule**    | Periodic polling                      | @nestjs/schedule      |
-| **NotificationModule** | WhatsApp messaging                    | Clawdbot CLI          |
+| **NotificationModule** | macOS native notifications            | node-notifier         |
 | **IpcModule**          | Inter-process communication           | node-ipc              |
 | **LoggerModule**       | Structured logging                    | Winston               |
 
@@ -369,7 +369,7 @@ export class SchedulerService {
          ▼
 ┌─────────────────┐
 │  Notify User    │
-│  (WhatsApp)     │
+│  (macOS)        │
 └─────────────────┘
 ```
 
@@ -379,14 +379,14 @@ export class SchedulerService {
 
 **Location:** `src/modules/notification/`
 
-**Purpose:** Sends WhatsApp notifications via Clawdbot.
+**Purpose:** Sends macOS native notifications via node-notifier.
 
 #### Components
 
 ```
 notification/
 ├── notification.module.ts
-└── notification.service.ts         # WhatsApp integration
+└── notification.service.ts         # macOS notification integration
 ```
 
 #### Service API
@@ -403,7 +403,7 @@ export class NotificationService {
   // Check if product was recently notified
   private shouldNotify(productId: string): boolean;
 
-  // Rate limiting: 1 notification per hour per product
+  // Rate limiting: 1 notification per 60 minutes per product
   private lastNotified: Map<string, Date> = new Map();
 }
 ```
@@ -422,15 +422,16 @@ Available variants: ${variants.join(', ')}
 `;
 ```
 
-#### Clawdbot Integration
+#### node-notifier Integration
 
-```bash
-# CLI invocation
-message \
-  --action=send \
-  --channel=whatsapp \
-  --target=+50586826131 \
-  --message="..."
+```typescript
+// macOS notification
+notifier.notify({
+  title: 'LumenTUI',
+  message: 'Product Available!',
+  sound: true,
+  icon: path.join(__dirname, 'assets', 'icon.png'),
+});
 ```
 
 ---
@@ -553,9 +554,9 @@ socket.emit('status', {}, (response) => {
      │
      ├─> NotificationService.notifyProductAvailable()
      │     │
-     │     ├─> Check rate limit (1hr)
+     │     ├─> Check rate limit (60 min)
      │     ├─> Format message
-     │     └─> Execute: message --action=send ...
+     │     └─> Send macOS notification via node-notifier
      │
      └─> IpcGateway.emit('product:updated')
                          │
@@ -703,12 +704,12 @@ const RETRY_CONFIG = {
 
 ### Current Limitations
 
-| Resource             | Limit          | Reason                   |
-| -------------------- | -------------- | ------------------------ |
-| **Products**         | ~10,000        | SQLite performance       |
-| **Poll Frequency**   | 30 minutes     | Rate limiting            |
-| **Concurrent Users** | 1              | Single daemon            |
-| **Notifications**    | 1/hour/product | WhatsApp spam prevention |
+| Resource             | Limit          | Reason                       |
+| -------------------- | -------------- | ---------------------------- |
+| **Products**         | ~10,000        | SQLite performance           |
+| **Poll Frequency**   | 30 minutes     | Rate limiting                |
+| **Concurrent Users** | 1              | Single daemon                |
+| **Notifications**    | 1/hour/product | Notification spam prevention |
 
 ### Scaling Strategies
 

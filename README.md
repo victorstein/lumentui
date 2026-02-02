@@ -1,6 +1,6 @@
 # 🌟 LumenTUI - Product Monitoring Service
 
-> Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time WhatsApp notifications
+> Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time macOS notifications
 
 [![Tests](https://img.shields.io/badge/tests-76%20passing-brightgreen)]()
 [![Coverage](<https://img.shields.io/badge/coverage-93%25%20(core)-green>)]()
@@ -11,12 +11,12 @@
 
 ## 📖 Description
 
-LumenTUI is a production-ready NestJS application that monitors product availability on shop.lumenalta.com and sends instant WhatsApp notifications when products become available. Built with enterprise-grade architecture, dependency injection, and comprehensive test coverage.
+LumenTUI is a production-ready NestJS application that monitors product availability on shop.lumenalta.com and sends instant macOS notifications when products become available. Built with enterprise-grade architecture, dependency injection, and comprehensive test coverage.
 
 ### ✨ Key Features
 
 - 🔄 **Real-time Monitoring** - Polls Shopify storefront API for product updates
-- 📱 **WhatsApp Notifications** - Instant alerts via Clawdbot integration
+- 📱 **macOS Notifications** - Instant native notification center alerts
 - 🍪 **Cookie-based Auth** - Secure authentication using macOS Chrome Keychain
 - 💾 **SQLite Storage** - Lightweight, reliable product tracking
 - 🏗️ **NestJS Architecture** - Modular, scalable, testable design
@@ -40,8 +40,8 @@ AppModule
 │   └── ShopifyService   # HTTP client with retry logic
 ├── StorageModule        # SQLite database layer
 │   └── DatabaseService  # Product CRUD operations
-└── NotificationModule   # WhatsApp notifications
-    └── NotificationService  # Clawdbot CLI integration
+└── NotificationModule   # macOS notifications
+    └── NotificationService  # Native notification center integration
 ```
 
 ### Data Flow
@@ -60,8 +60,8 @@ AppModule
                             │
                             ▼
                      ┌──────────────┐
-                     │  WhatsApp    │
-                     │  (Clawdbot)  │
+                     │    macOS     │
+                     │Notifications │
                      └──────────────┘
 ```
 
@@ -71,9 +71,8 @@ AppModule
 
 - **Node.js** >= 18.x
 - **npm** >= 9.x
-- **macOS** (for Chrome Keychain integration)
+- **macOS** (for Chrome Keychain integration and native notifications)
 - **Chrome Browser** (with valid shop.lumenalta.com session)
-- **Clawdbot** (for WhatsApp notifications)
 
 ---
 
@@ -96,7 +95,6 @@ Edit `.env` and configure:
 
 ```bash
 # Required
-NOTIFICATION_PHONE=+50586826131           # Your WhatsApp number (E.164 format)
 LUMENTUI_SHOP_URL=https://shop.lumenalta.com
 
 # Optional (defaults provided)
@@ -232,16 +230,15 @@ GET  /api/health           // Health check
 
 ### Environment Variables
 
-| Variable                 | Description             | Default                    | Required |
-| ------------------------ | ----------------------- | -------------------------- | -------- |
-| `NOTIFICATION_PHONE`     | WhatsApp target (E.164) | -                          | ✅       |
-| `LUMENTUI_SHOP_URL`      | Shopify store URL       | https://shop.lumenalta.com | ✅       |
-| `DB_PATH`                | SQLite database path    | data/lumentui.db           | ❌       |
-| `LOG_LEVEL`              | Logging level           | info                       | ❌       |
-| `LOG_FILE`               | Log file path           | data/logs/app.log          | ❌       |
-| `SHOPIFY_TIMEOUT_MS`     | API timeout             | 10000                      | ❌       |
-| `SHOPIFY_RETRY_ATTEMPTS` | Retry attempts          | 3                          | ❌       |
-| `LUMENTUI_COOKIES`       | Manual cookie override  | -                          | ❌       |
+| Variable                 | Description            | Default                    | Required |
+| ------------------------ | ---------------------- | -------------------------- | -------- |
+| `LUMENTUI_SHOP_URL`      | Shopify store URL      | https://shop.lumenalta.com | ✅       |
+| `DB_PATH`                | SQLite database path   | data/lumentui.db           | ❌       |
+| `LOG_LEVEL`              | Logging level          | info                       | ❌       |
+| `LOG_FILE`               | Log file path          | data/logs/app.log          | ❌       |
+| `SHOPIFY_TIMEOUT_MS`     | API timeout            | 10000                      | ❌       |
+| `SHOPIFY_RETRY_ATTEMPTS` | Retry attempts         | 3                          | ❌       |
+| `LUMENTUI_COOKIES`       | Manual cookie override | -                          | ❌       |
 
 ### Database Schema
 
@@ -300,7 +297,7 @@ lumentui/
 │       │   ├── entities/          # Product entity
 │       │   └── utils/             # Normalizers
 │       │
-│       ├── notification/          # WhatsApp notifications
+│       ├── notification/          # macOS notifications
 │       │   └── notification.service.ts
 │       │
 │       ├── poller/                # Polling scheduler (WIP)
@@ -384,17 +381,13 @@ npm run start:dev  # Database will be recreated
 
 ### Notification Issues
 
-**Problem:** WhatsApp notifications not sending
+**Problem:** macOS notifications not appearing
 
 **Solution:**
 
-1. Verify Clawdbot is running: `clawdbot gateway status`
-2. Check phone number format: Must be E.164 (e.g., `+50586826131`)
-3. Test notification manually:
-
-```bash
-message --action=send --channel=whatsapp --target=+50586826131 --message="Test"
-```
+1. Check notification permissions: System Settings > Notifications > Terminal (or your app)
+2. Verify notifications are enabled in your environment
+3. Check logs for notification errors: `lumentui logs`
 
 ---
 
@@ -550,7 +543,7 @@ GitHub: [@steinhakase](https://github.com/steinhakase)
 ## 🙏 Acknowledgments
 
 - **NestJS** - Framework foundation
-- **Clawdbot** - WhatsApp integration
+- **node-notifier** - macOS notification integration
 - **Shopify** - Storefront API
 - **chrome-cookies-secure** - Cookie extraction
 - **better-sqlite3** - Database layer
@@ -567,7 +560,7 @@ GitHub: [@steinhakase](https://github.com/steinhakase)
 - API module with Shopify integration + retry logic
 - Storage module with SQLite persistence
 - Scheduler module with cron jobs (30min polls)
-- Notification module with WhatsApp integration
+- Notification module with native macOS notifications
 - Full test coverage (76 tests, 93%+ coverage on core services)
 - Integration tests for end-to-end flow
 - CLI interface with Commander.js

@@ -14,7 +14,7 @@ Daemon process specialist for polling, IPC server, and notifications.
 - **SchedulerModule** — @Cron polling via `SchedulerService.handlePoll()`, `forcePoll()` for on-demand polling
 - **DifferModule** — `DifferService.compare()` detects new/updated products
 - **IpcModule** — Unix socket server via `IpcGateway`, emits heartbeat, product updates, errors, logs
-- **NotificationModule** — WhatsApp alerts via Clawdbot CLI, rate-limited, filtered by price/keywords
+- **NotificationModule** — macOS native notifications via node-notifier, rate-limited, filtered by price/keywords
 
 ## Key Files
 
