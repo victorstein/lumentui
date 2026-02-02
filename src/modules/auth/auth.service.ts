@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService } from '../../common/logger/logger.service';
 import { CookieStorageService } from './cookie-storage.service';
-import * as chrome from 'chrome-cookies-secure';
+import { getCookiesForUrl } from './chrome-cookies';
 import { Cookie } from './interfaces/cookie.interface';
 import { AuthException } from './exceptions/auth.exception';
 
@@ -18,20 +18,12 @@ export class AuthService {
     this.logger.log(`Extracting cookies for ${url}`, 'AuthService');
 
     try {
-      // Wrap chrome.getCookies in Promise
-      const cookies = await new Promise<Cookie[]>((resolve, reject) => {
-        chrome.getCookies(
-          url,
-          'puppeteer',
-          (err: Error | null, cookies: Cookie[]) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(cookies || []);
-            }
-          },
-        );
-      });
+      // Get Chrome profile from config, default to 'Default'
+      const profile =
+        this.configService.get<string>('CHROME_PROFILE') || 'Default';
+
+      // Extract cookies from Chrome using better-sqlite3
+      const cookies = getCookiesForUrl(url, profile);
 
       // Filter for storefront_digest cookie
       const digestCookie = cookies.find((c) => c.name === 'storefront_digest');

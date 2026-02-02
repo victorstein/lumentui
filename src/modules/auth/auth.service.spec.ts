@@ -4,10 +4,10 @@ import { AuthService } from './auth.service';
 import { CookieStorageService } from './cookie-storage.service';
 import { LoggerService } from '../../common/logger/logger.service';
 import { AuthException } from './exceptions/auth.exception';
-import * as chrome from 'chrome-cookies-secure';
+import * as chromeCookies from './chrome-cookies';
 
-// Mock chrome-cookies-secure
-jest.mock('chrome-cookies-secure');
+// Mock chrome-cookies
+jest.mock('./chrome-cookies');
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -68,10 +68,8 @@ describe('AuthService', () => {
         },
       ];
 
-      (chrome.getCookies as jest.Mock).mockImplementation(
-        (url, format, callback) => {
-          callback(null, mockCookies);
-        },
+      (chromeCookies.getCookiesForUrl as jest.Mock).mockReturnValue(
+        mockCookies,
       );
 
       const result = await service.extractCookies('https://shop.lumenalta.com');
@@ -88,13 +86,16 @@ describe('AuthService', () => {
         {
           name: 'other-cookie',
           value: 'value',
+          domain: 'shop.lumenalta.com',
+          path: '/',
+          expires: 0,
+          httpOnly: false,
+          secure: false,
         },
       ];
 
-      (chrome.getCookies as jest.Mock).mockImplementation(
-        (url, format, callback) => {
-          callback(null, mockCookies);
-        },
+      (chromeCookies.getCookiesForUrl as jest.Mock).mockReturnValue(
+        mockCookies,
       );
 
       await expect(
@@ -105,12 +106,10 @@ describe('AuthService', () => {
       ).rejects.toThrow('Authentication cookie not found');
     });
 
-    it('should handle chrome-cookies-secure errors with AuthException', async () => {
-      (chrome.getCookies as jest.Mock).mockImplementation(
-        (url, format, callback) => {
-          callback(new Error('Keychain access denied'), null);
-        },
-      );
+    it('should handle chrome-cookies errors with AuthException', async () => {
+      (chromeCookies.getCookiesForUrl as jest.Mock).mockImplementation(() => {
+        throw new Error('Keychain access denied');
+      });
 
       await expect(
         service.extractCookies('https://shop.lumenalta.com'),
