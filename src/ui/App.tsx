@@ -1,14 +1,14 @@
 import React from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
-import { useDaemon } from './hooks/useDaemon';
-import { useProducts } from './hooks/useProducts';
-import { Header } from './components/Header';
-import { ProductList } from './components/ProductList';
-import { ProductDetail } from './components/ProductDetail';
-import { LogPanel } from './components/LogPanel';
-import { StatusBar } from './components/StatusBar';
-import { NotificationBanner } from './components/NotificationBanner';
-import { theme } from './theme';
+import { useDaemon } from './hooks/useDaemon.js';
+import { useProducts } from './hooks/useProducts.js';
+import { Header } from './components/Header.js';
+import { ProductList } from './components/ProductList.js';
+import { ProductDetail } from './components/ProductDetail.js';
+import { LogPanel } from './components/LogPanel.js';
+import { StatusBar } from './components/StatusBar.js';
+import { NotificationBanner } from './components/NotificationBanner.js';
+import { theme } from './theme.js';
 
 /**
  * Main TUI Application Component

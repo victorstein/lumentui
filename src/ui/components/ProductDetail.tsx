@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { theme } from '../theme';
-import { Product } from '../hooks/useDaemon';
+import { theme } from '../theme.js';
+import { Product } from '../hooks/useDaemon.js';
 
 interface ProductDetailProps {
   product: Product | null;

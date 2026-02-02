@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Product } from './useDaemon';
+import { Product } from './useDaemon.js';
 
 /**
  * View mode for product display

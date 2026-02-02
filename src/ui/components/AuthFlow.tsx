@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useApp } from 'ink';
-import { theme } from '../theme';
+import { theme } from '../theme.js';
 
 type AuthState =
   | 'checking'

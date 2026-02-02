@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { theme } from '../theme';
-import { LogEntry } from '../hooks/useDaemon';
+import { theme } from '../theme.js';
+import { LogEntry } from '../hooks/useDaemon.js';
 
 interface LogPanelProps {
   logs: LogEntry[];
