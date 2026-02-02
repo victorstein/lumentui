@@ -1,4 +1,28 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+/**
+ * @jest-environment jsdom
+ */
+
+// Mock node-ipc before imports
+const mockIpcClient = {
+  on: jest.fn(),
+  emit: jest.fn(),
+};
+
+const mockIpc = {
+  config: {
+    id: '',
+    retry: 0,
+    silent: true,
+  },
+  connectTo: jest.fn(),
+  disconnect: jest.fn(),
+  of: {
+    'lumentui-daemon': mockIpcClient,
+  },
+};
+
+jest.mock('node-ipc', () => mockIpc);
+
 import { renderHook, act } from '@testing-library/react';
 import { useDaemon } from './useDaemon';
 import * as ipc from 'node-ipc';
@@ -9,49 +33,27 @@ import * as ipc from 'node-ipc';
  * Note: These tests mock node-ipc to avoid actual socket connections
  */
 
-// Mock node-ipc
-vi.mock('node-ipc', () => ({
-  default: {
-    config: {
-      id: '',
-      retry: 0,
-      silent: true,
-    },
-    connectTo: vi.fn(),
-    disconnect: vi.fn(),
-    of: {},
-  },
-}));
-
 describe('useDaemon', () => {
-  let mockClient: any;
   let mockEventHandlers: Record<string, Function>;
 
   beforeEach(() => {
     // Reset mocks
     mockEventHandlers = {};
     
-    // Create mock client
-    mockClient = {
-      on: vi.fn((event: string, handler: Function) => {
-        mockEventHandlers[event] = handler;
-      }),
-      emit: vi.fn(),
-    };
+    // Reset mock client functions
+    mockIpcClient.on = jest.fn((event: string, handler: Function) => {
+      mockEventHandlers[event] = handler;
+    });
+    mockIpcClient.emit = jest.fn();
 
-    // Mock ipc.of to return our mock client
-    (ipc as any).of = {
-      'lumentui-daemon': mockClient,
-    };
-
-    // Mock connectTo
-    (ipc as any).connectTo = vi.fn((id: string, path: string, callback: Function) => {
+    // Mock connectTo to invoke callback immediately
+    mockIpc.connectTo = jest.fn((id: string, path: string, callback: Function) => {
       callback();
     });
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   it('should initialize with default state', () => {
@@ -163,7 +165,7 @@ describe('useDaemon', () => {
   });
 
   it('should clear notification after 5 seconds', () => {
-    vi.useFakeTimers();
+    jest.useFakeTimers();
     
     const { result } = renderHook(() => useDaemon());
     const mockProduct = {
@@ -192,12 +194,12 @@ describe('useDaemon', () => {
 
     // Fast-forward 5 seconds
     act(() => {
-      vi.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(5000);
     });
 
     expect(result.current.newProductNotification).toBeNull();
 
-    vi.useRealTimers();
+    jest.useRealTimers();
   });
 
   it('should set error on daemon:error event', () => {
@@ -257,7 +259,7 @@ describe('useDaemon', () => {
       result.current.forcePoll();
     });
 
-    expect(mockClient.emit).toHaveBeenCalledWith(
+    expect(mockIpcClient.emit).toHaveBeenCalledWith(
       'force-poll',
       expect.objectContaining({
         timestamp: expect.any(Number),
@@ -326,6 +328,6 @@ describe('useDaemon', () => {
 
     unmount();
 
-    expect(ipc.disconnect).toHaveBeenCalledWith('lumentui-daemon');
+    expect(mockIpc.disconnect).toHaveBeenCalledWith('lumentui-daemon');
   });
 });
