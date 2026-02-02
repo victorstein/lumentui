@@ -214,7 +214,6 @@ program
         if (found) {
           console.log('✅ Authentication successful!');
           console.log('You can now use: lumentui start');
-          await app.close();
           process.exit(0);
         }
 
@@ -247,7 +246,6 @@ program
             process.stdout.write('\r' + ' '.repeat(60) + '\r');
             console.log('✅ Authentication successful!');
             console.log('You can now use: lumentui start');
-            await app.close();
             process.exit(0);
           } catch {
             // Not found yet, keep polling
@@ -260,7 +258,6 @@ program
         console.log(
           '   Please log in to shop.lumenalta.com in Chrome and try again.',
         );
-        await app.close();
         process.exit(1);
       }
 
