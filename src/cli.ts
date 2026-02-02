@@ -14,6 +14,12 @@ import * as fs from 'fs';
 // Suppress console logs in CLI mode (logs still go to file)
 process.env.LUMENTUI_CLI_MODE = '1';
 
+// Helper: force real ESM import() from CJS context.
+// TypeScript compiles `await import('x')` to `require('x')` in CommonJS,
+// which fails for ESM-only packages like Ink 5. This bypasses that.
+const esmImport = (specifier: string) =>
+  new Function('s', 'return import(s)')(specifier);
+
 const program = new Command();
 
 /**
@@ -202,13 +208,12 @@ program
         const url = 'https://shop.lumenalta.com';
         const { execSync } = require('child_process');
 
-        // Render Ink AuthFlow component
-        // @ts-ignore - Dynamic ESM import
-        const React = await import('react');
-        // @ts-ignore - Dynamic ESM import
-        const { render } = await import('ink');
-        // @ts-ignore - Dynamic import of built UI
-        const AuthFlowModule = await import('./ui/components/AuthFlow.js');
+        // Render Ink AuthFlow component (ESM dynamic import)
+        const React = await esmImport('react');
+        const { render } = await esmImport('ink');
+        const AuthFlowModule = await esmImport(
+          path.resolve(__dirname, 'ui/components/AuthFlow.js'),
+        );
 
         render(
           React.createElement(AuthFlowModule.AuthFlow, {
@@ -319,14 +324,11 @@ program
           process.exit(0);
         }
 
-        // Launch TUI (Phase 8 complete!)
+        // Launch TUI
         try {
-          // @ts-ignore - Dynamic ESM import
-          const { render } = await import('ink');
-          // @ts-ignore - Dynamic ESM import
-          const React = await import('react');
-          // @ts-ignore - Dynamic import of built TUI
-          const App = await import('./ui/App.js');
+          const { render } = await esmImport('ink');
+          const React = await esmImport('react');
+          const App = await esmImport(path.resolve(__dirname, 'ui/App.js'));
 
           // Render the TUI
           render(React.createElement(App.default));
