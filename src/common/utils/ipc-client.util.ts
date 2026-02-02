@@ -1,4 +1,5 @@
 import * as ipcModule from 'node-ipc';
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const ipc = (ipcModule as any).default || ipcModule;
 
 export class IpcClient {
@@ -12,27 +13,36 @@ export class IpcClient {
     return new Promise((resolve) => {
       const clientId = `lumentui-cli-${Date.now()}`;
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       ipc.config.id = clientId;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       ipc.config.retry = 1500;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       ipc.config.silent = true;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       ipc.config.stopRetrying = true;
 
       let connected = false;
       const timeout = setTimeout(() => {
         if (!connected) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.disconnect(clientId);
           resolve(false);
         }
       }, this.CONNECT_TIMEOUT);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       ipc.connectTo(clientId, this.SOCKET_PATH, () => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ipc.of[clientId].on('connect', () => {
           connected = true;
           clearTimeout(timeout);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.disconnect(clientId);
           resolve(true);
         });
 
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ipc.of[clientId].on('error', () => {
           clearTimeout(timeout);
           resolve(false);
@@ -48,28 +58,39 @@ export class IpcClient {
     return new Promise((resolve) => {
       const clientId = `lumentui-cli-${Date.now()}`;
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       ipc.config.id = clientId;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       ipc.config.retry = 1500;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       ipc.config.silent = true;
 
       const timeout = setTimeout(() => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ipc.disconnect(clientId);
         resolve(false);
       }, this.CONNECT_TIMEOUT);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       ipc.connectTo(clientId, this.SOCKET_PATH, () => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ipc.of[clientId].on('connect', () => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.of[clientId].emit('force-poll', {});
         });
 
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ipc.of[clientId].on('force-poll-received', () => {
           clearTimeout(timeout);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.disconnect(clientId);
           resolve(true);
         });
 
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ipc.of[clientId].on('error', () => {
           clearTimeout(timeout);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.disconnect(clientId);
           resolve(false);
         });

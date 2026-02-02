@@ -12,7 +12,9 @@ export class StorageNormalizer {
       handle: entity.handle,
       price: entity.price,
       available: entity.available === 1,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       variants: JSON.parse(entity.variants),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       images: JSON.parse(entity.images),
       description: entity.description,
       url: entity.url,

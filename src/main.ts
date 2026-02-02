@@ -31,8 +31,8 @@ async function bootstrap() {
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 
   // Keep process alive
   logger.log('Daemon is running. Press Ctrl+C to stop.', 'Bootstrap');

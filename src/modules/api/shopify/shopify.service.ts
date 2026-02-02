@@ -25,12 +25,13 @@ export class ShopifyService implements OnModuleInit {
     private readonly logger: LoggerService,
   ) {}
 
-  onModuleInit() {
+  onModuleInit(): void {
     // Configure axios-retry
     axiosRetry(this.httpService.axiosRef, {
       retries: 3,
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       retryDelay: axiosRetry.exponentialDelay,
-      retryCondition: (error) => {
+      retryCondition: (error): boolean => {
         // Retry on network errors or 5xx
         const status = error.response?.status;
         return (
@@ -51,7 +52,7 @@ export class ShopifyService implements OnModuleInit {
     this.logger.log('Fetching products from Shopify', 'ShopifyService');
 
     try {
-      const cookieHeader = await this.authService.loadCookies();
+      const cookieHeader = this.authService.loadCookies();
 
       const response = await firstValueFrom(
         this.httpService.get<ShopifyProductsResponse>(
@@ -168,18 +169,22 @@ export class ShopifyService implements OnModuleInit {
     // Handle network errors
     if (this.hasErrorCode(error)) {
       if (error.code === 'ECONNABORTED') {
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
+        const errorStr = error instanceof Error ? error.message : String(error);
         throw new ShopifyException(
           'Request timeout. Please check your internet connection.',
           undefined,
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(errorStr),
         );
       }
 
       if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
+        const errorStr = error instanceof Error ? error.message : String(error);
         throw new ShopifyException(
           'Cannot reach Shopify. Please check your internet connection.',
           undefined,
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(errorStr),
         );
       }
     }

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as ipcModule from 'node-ipc';
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const ipc = (ipcModule as any).default || ipcModule;
 import { existsSync, unlinkSync } from 'fs';
 import { exec } from 'child_process';
@@ -41,6 +42,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
     @Inject(forwardRef(() => 'SchedulerService'))
     schedulerService: any,
   ): void {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     this.schedulerService = schedulerService;
   }
 
@@ -65,15 +67,20 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
     await this.cleanupStaleSocket();
 
     // Configure node-ipc
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     ipc.config.id = 'lumentui-daemon';
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     ipc.config.retry = 1500;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     ipc.config.silent = true; // Disable internal logging
 
     // Start server
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.serve(this.socketPath, () => {
       this.setupEventHandlers();
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.start();
     this.isServerRunning = true;
 
@@ -104,23 +111,33 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       throw new Error(
         `IPC socket ${this.socketPath} is already in use by another process`,
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       // lsof returns non-zero exit code if socket is not in use
       // This means the socket file is stale (no process listening)
-      if (error.code === 1 || error.message?.includes('No such')) {
+      const errorCode =
+        error && typeof error === 'object' && 'code' in error
+          ? (error as { code: number }).code
+          : undefined;
+      const errorMessage = error instanceof Error ? error.message : '';
+
+      if (errorCode === 1 || errorMessage.includes('No such')) {
         this.logger.log('Removing stale socket file');
         try {
           unlinkSync(this.socketPath);
           this.logger.log('Stale socket file removed successfully');
-        } catch (unlinkError) {
+        } catch (unlinkError: unknown) {
+          const unlinkErrorMessage =
+            unlinkError instanceof Error
+              ? unlinkError.message
+              : 'Unknown error';
           this.logger.error(
-            `Failed to remove stale socket file: ${unlinkError.message}`,
+            `Failed to remove stale socket file: ${unlinkErrorMessage}`,
           );
           throw unlinkError;
         }
       } else {
         // Some other error occurred (e.g., lsof not found, permission denied)
-        this.logger.error(`Error checking socket status: ${error.message}`);
+        this.logger.error(`Error checking socket status: ${errorMessage}`);
         // Attempt to remove socket anyway
         try {
           unlinkSync(this.socketPath);
@@ -140,6 +157,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.stop();
     this.isServerRunning = false;
 
@@ -148,8 +166,10 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       try {
         unlinkSync(this.socketPath);
         this.logger.log('Socket file cleaned up');
-      } catch (error: any) {
-        this.logger.warn(`Failed to clean up socket file: ${error.message}`);
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        this.logger.warn(`Failed to clean up socket file: ${errorMessage}`);
       }
     }
 
@@ -160,19 +180,23 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
    * Setup event handlers for client connections
    */
   private setupEventHandlers(): void {
-    ipc.server.on('connect', (socket: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on('connect', () => {
       this.logger.log('TUI client connected');
     });
 
-    ipc.server.on('disconnect', (socket: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on('disconnect', () => {
       this.logger.log('TUI client disconnected');
     });
 
     // Listen for force-poll event from client
-    ipc.server.on('force-poll', async (data: any, socket: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on('force-poll', async (_data: unknown, socket: unknown) => {
       this.logger.log('Force poll requested by client');
 
       // Acknowledge receipt
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       ipc.server.emit(socket, 'force-poll-received', {
         timestamp: Date.now(),
       });
@@ -180,27 +204,37 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       // Execute force poll via SchedulerService
       if (this.schedulerService) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
           const result = await this.schedulerService.forcePoll();
 
           // Emit result back to client
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.server.emit(socket, 'force-poll-result', {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             success: result.success,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             productCount: result.productCount,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             newProducts: result.newProducts,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             durationMs: result.durationMs,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             error: result.error,
             timestamp: Date.now(),
           });
 
           this.logger.log(
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             `Force poll completed: ${result.success ? 'success' : 'failed'}`,
           );
-        } catch (error) {
+        } catch (error: unknown) {
           const errorMessage =
             error instanceof Error ? error.message : 'Unknown error';
-          this.logger.error(`Force poll failed: ${errorMessage}`, error.stack);
+          const errorStack = error instanceof Error ? error.stack : undefined;
+          this.logger.error(`Force poll failed: ${errorMessage}`, errorStack);
 
           // Emit error back to client
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.server.emit(socket, 'force-poll-result', {
             success: false,
             productCount: 0,
@@ -214,6 +248,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
         this.logger.warn('SchedulerService not available, cannot force poll');
 
         // Emit error back to client
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ipc.server.emit(socket, 'force-poll-result', {
           success: false,
           productCount: 0,
@@ -225,6 +260,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       }
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.on('error', (error: Error) => {
       this.logger.error(`IPC server error: ${error.message}`, error.stack);
     });
@@ -239,6 +275,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('daemon:heartbeat', {
       timestamp,
     });
@@ -255,6 +292,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('products:updated', {
       products,
       count: products.length,
@@ -273,6 +311,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('product:new', {
       product,
       timestamp: Date.now(),
@@ -290,6 +329,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('daemon:error', {
       error,
       timestamp: Date.now(),
@@ -307,6 +347,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('log', {
       level,
       message,

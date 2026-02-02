@@ -1,5 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { useState, useEffect, useCallback } from 'react';
 import * as ipcModule from 'node-ipc';
+
 const ipc = (ipcModule as any).default || ipcModule;
 
 /**

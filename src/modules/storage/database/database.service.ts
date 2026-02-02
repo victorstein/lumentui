@@ -352,9 +352,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         `Recorded notification for product ${productId} (sent: ${sent})`,
         'DatabaseService',
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Failed to record notification: ${error.message}`,
+        `Failed to record notification: ${errorMessage}`,
         'DatabaseService',
       );
     }
@@ -374,9 +376,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         `,
         [productId, limit],
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Failed to get notification history: ${error.message}`,
+        `Failed to get notification history: ${errorMessage}`,
         'DatabaseService',
       );
       return [];
@@ -400,9 +404,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         `,
         [since],
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Failed to get recent notifications: ${error.message}`,
+        `Failed to get recent notifications: ${errorMessage}`,
         'DatabaseService',
       );
       return [];

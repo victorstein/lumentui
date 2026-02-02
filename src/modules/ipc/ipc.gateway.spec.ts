@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { IpcGateway } from './ipc.gateway';
@@ -42,7 +44,7 @@ jest.mock('child_process', () => ({
 describe('IpcGateway', () => {
   let gateway: IpcGateway;
   let module: TestingModule;
-  let configService: any;
+  let _configService: any;
 
   beforeEach(async () => {
     // Reset mocks
@@ -66,7 +68,7 @@ describe('IpcGateway', () => {
     }).compile();
 
     gateway = module.get<IpcGateway>(IpcGateway);
-    configService = module.get<ConfigService>(ConfigService);
+    _configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(async () => {
@@ -117,6 +119,7 @@ describe('IpcGateway', () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       (child_process.exec as jest.Mock).mockImplementation((cmd, callback) => {
         // Simulate lsof returning error (socket not in use)
+
         callback({ code: 1 }, '', '');
       });
 

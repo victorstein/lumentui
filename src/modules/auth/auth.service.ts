@@ -46,12 +46,12 @@ export class AuthService {
         'AuthService',
       );
       return sessionCookies;
-    } catch (error) {
-      this.logger.error(
-        'Failed to extract cookies',
-        error.stack,
-        'AuthService',
-      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      this.logger.error('Failed to extract cookies', errorStack, 'AuthService');
 
       // FIX #3: Wrap error con contexto user-friendly
       if (error instanceof AuthException) {
@@ -59,19 +59,19 @@ export class AuthService {
       }
 
       if (
-        error.message?.includes('Keychain') ||
-        error.message?.includes('access')
+        errorMessage.includes('Keychain') ||
+        errorMessage.includes('access')
       ) {
         throw new AuthException(
           'Failed to access Chrome Keychain. Please grant permission when prompted.',
         );
       }
 
-      throw new AuthException(`Cookie extraction failed: ${error.message}`);
+      throw new AuthException(`Cookie extraction failed: ${errorMessage}`);
     }
   }
 
-  async saveCookies(cookies: Cookie[]): Promise<void> {
+  saveCookies(cookies: Cookie[]): void {
     this.logger.log('Saving cookies to storage', 'AuthService');
 
     try {
@@ -79,13 +79,14 @@ export class AuthService {
       this.cookieStorage.saveCookies(cookies);
 
       this.logger.log('Cookies saved successfully', 'AuthService');
-    } catch (error) {
-      this.logger.error('Failed to save cookies', error.stack, 'AuthService');
+    } catch (error: unknown) {
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error('Failed to save cookies', errorStack, 'AuthService');
       throw new AuthException('Failed to save cookies');
     }
   }
 
-  async loadCookies(): Promise<string> {
+  loadCookies(): string {
     this.logger.log('Loading cookies from storage', 'AuthService');
 
     try {
@@ -119,12 +120,13 @@ export class AuthService {
         'AuthService',
       );
       return cookieHeader;
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof AuthException) {
         throw error;
       }
 
-      this.logger.error('Failed to load cookies', error.stack, 'AuthService');
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error('Failed to load cookies', errorStack, 'AuthService');
       throw new AuthException('No cookies found. Please run: lumentui auth');
     }
   }
@@ -145,9 +147,9 @@ export class AuthService {
     return cookie.expires < nowInSeconds;
   }
 
-  async validateCookies(): Promise<boolean> {
+  validateCookies(): boolean {
     try {
-      const cookieHeader = await this.loadCookies();
+      const cookieHeader = this.loadCookies();
       return !!cookieHeader;
     } catch {
       return false;

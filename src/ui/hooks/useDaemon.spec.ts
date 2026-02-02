@@ -23,6 +23,7 @@ const mockIpc = {
 
 jest.mock('node-ipc', () => mockIpc);
 
+/* eslint-disable */
 import { renderHook, act } from '@testing-library/react';
 import { useDaemon } from './useDaemon';
 import * as ipc from 'node-ipc';

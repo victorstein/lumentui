@@ -24,7 +24,7 @@ export class NotificationService implements OnModuleInit {
   /**
    * Initialize service and rebuild rate limit cache from database
    */
-  async onModuleInit() {
+  onModuleInit(): void {
     this.rebuildRateLimitCache();
   }
 
@@ -61,7 +61,7 @@ export class NotificationService implements OnModuleInit {
             sound: true,
             timeout: 10,
           },
-          (error, response) => {
+          (error: Error | null) => {
             if (error) {
               reject(error);
             } else {
@@ -83,9 +83,11 @@ export class NotificationService implements OnModuleInit {
       );
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Failed to send notification for product ${product.id}: ${error.message}`,
+        `Failed to send notification for product ${product.id}: ${errorMessage}`,
         'NotificationService',
       );
 
@@ -146,6 +148,7 @@ export class NotificationService implements OnModuleInit {
   /**
    * Get notification history for a product
    */
+
   getNotificationHistory(productId: string, limit: number = 10): any[] {
     // Use DatabaseService method instead of raw db access
     return this.databaseService.getNotificationHistory(productId, limit);
@@ -174,9 +177,11 @@ export class NotificationService implements OnModuleInit {
         `Rate limit cache rebuilt with ${recentNotifications.length} entries`,
         'NotificationService',
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Failed to rebuild rate limit cache: ${error.message}`,
+        `Failed to rebuild rate limit cache: ${errorMessage}`,
         'NotificationService',
       );
     }

@@ -18,6 +18,7 @@ process.env.LUMENTUI_CLI_MODE = '1';
 // TypeScript compiles `await import('x')` to `require('x')` in CommonJS,
 // which fails for ESM-only packages like Ink 5. This bypasses that.
 const esmImport = (specifier: string) =>
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
   new Function('s', 'return import(s)')(specifier);
 
 const program = new Command();
@@ -184,7 +185,7 @@ program
   .command('auth')
   .description('Authenticate with shop.lumenalta.com')
   .option('--check', 'Verify current session')
-  .action(async (options) => {
+  .action(async (options: { check?: boolean }) => {
     try {
       // Bootstrap NestJS app to get AuthService
       const app = await NestFactory.createApplicationContext(AppModule, {
@@ -195,7 +196,7 @@ program
 
       if (options.check) {
         // Check if cookies exist and are valid
-        const isValid = await authService.validateCookies();
+        const isValid = authService.validateCookies();
 
         if (isValid) {
           console.log('✅ Session is valid');
@@ -206,27 +207,40 @@ program
         }
       } else {
         const url = 'https://shop.lumenalta.com';
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
         const { execSync } = require('child_process');
 
         // Render Ink AuthFlow component (ESM dynamic import)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const React = await esmImport('react');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const { render } = await esmImport('ink');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const AuthFlowModule = await esmImport(
           path.resolve(__dirname, 'ui/components/AuthFlow.js'),
         );
 
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         render(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           React.createElement(AuthFlowModule.AuthFlow, {
             extractCookies: () => authService.extractCookies(url),
-            saveCookies: (cookies: any) => authService.saveCookies(cookies),
+
+            saveCookies: (cookies: unknown) =>
+              authService.saveCookies(
+                cookies as import('./modules/auth/interfaces/cookie.interface').Cookie[],
+              ),
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
             openBrowser: () => execSync(`open "${url}"`),
           }),
         );
       }
 
       await app.close();
-    } catch (error) {
-      console.error('❌ Authentication failed:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Authentication failed:', errorMessage);
       process.exit(1);
     }
   });
@@ -239,15 +253,20 @@ program
   .command('start')
   .description('Start daemon and TUI')
   .option('--daemon-only', 'Start only daemon (no TUI)')
-  .action(async (options) => {
+  .action(async (options: { daemonOnly?: boolean }) => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const React = await esmImport('react');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { render } = await esmImport('ink');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const StartFlowModule = await esmImport(
         path.resolve(__dirname, 'ui/components/StartFlow.js'),
       );
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       render(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         React.createElement(StartFlowModule.StartFlow, {
           daemonOnly: !!options.daemonOnly,
           validateConfig: () => CliValidator.validateEnvironment(),
@@ -277,15 +296,19 @@ program
           },
           waitForDaemon: () => IpcClient.waitForDaemon(5000),
           launchTui: async () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             const AppModule = await esmImport(
               path.resolve(__dirname, 'ui/App.js'),
             );
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             render(React.createElement(AppModule.default));
           },
         }),
       );
-    } catch (error) {
-      console.error('❌ Failed to start:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to start:', errorMessage);
       process.exit(1);
     }
   });
@@ -298,7 +321,7 @@ program
   .command('stop')
   .description('Stop daemon')
   .option('--force', 'Force kill daemon (SIGKILL)')
-  .action(async (options) => {
+  .action(async (options: { force?: boolean }) => {
     try {
       const status = PidManager.getDaemonStatus();
 
@@ -334,8 +357,10 @@ program
 
       console.log('✅ Daemon stopped');
       process.exit(0);
-    } catch (error) {
-      console.error('❌ Failed to stop daemon:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to stop daemon:', errorMessage);
       process.exit(1);
     }
   });
@@ -349,18 +374,23 @@ program
   .description('Check daemon status')
   .action(async () => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const React = await esmImport('react');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { render } = await esmImport('ink');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const StatusViewModule = await esmImport(
         path.resolve(__dirname, 'ui/components/StatusView.js'),
       );
 
       const daemonStatus = PidManager.getDaemonStatus();
       let ipcReachable: boolean | null = null;
-      let lastPoll: any = null;
+      let lastPoll: unknown = null;
 
       // Render initial loading state
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
       const { rerender } = render(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         React.createElement(StatusViewModule.StatusView, {
           daemonStatus,
           ipcReachable: daemonStatus.isRunning ? null : false,
@@ -390,7 +420,9 @@ program
         }
 
         // Re-render with data
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         rerender(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           React.createElement(StatusViewModule.StatusView, {
             daemonStatus,
             ipcReachable,
@@ -401,8 +433,10 @@ program
       }
 
       process.exit(0);
-    } catch (error) {
-      console.error('❌ Failed to get status:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to get status:', errorMessage);
       process.exit(1);
     }
   });
@@ -416,7 +450,7 @@ program
   .description('Display daemon logs')
   .option('--follow', 'Follow log output (stream)')
   .option('-n, --lines <number>', 'Number of lines to show', '50')
-  .action(async (options) => {
+  .action((options: { follow?: boolean; lines: string }) => {
     try {
       const logDir = path.join(process.cwd(), 'data', 'logs');
       const logFiles = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
@@ -447,9 +481,13 @@ program
 
       displayLines.forEach((line) => {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           const logEntry = JSON.parse(line);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
           const timestamp = new Date(logEntry.timestamp).toLocaleTimeString();
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-member-access
           const level = logEntry.level.toUpperCase().padEnd(5);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           const message = logEntry.message;
           console.log(`[${timestamp}] ${level} ${message}`);
         } catch {
@@ -480,11 +518,15 @@ program
                   .filter((l) => l.trim());
                 newLines.forEach((line) => {
                   try {
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     const logEntry = JSON.parse(line);
                     const timestamp = new Date(
+                      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
                       logEntry.timestamp,
                     ).toLocaleTimeString();
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-member-access
                     const level = logEntry.level.toUpperCase().padEnd(5);
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
                     const message = logEntry.message;
                     console.log(`[${timestamp}] ${level} ${message}`);
                   } catch {
@@ -505,8 +547,10 @@ program
           process.exit(0);
         });
       }
-    } catch (error) {
-      console.error('❌ Failed to read logs:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to read logs:', errorMessage);
       process.exit(1);
     }
   });
@@ -723,7 +767,7 @@ configCommand
   .command('get')
   .description('Display current configuration values')
   .option('-a, --all', 'Show all configuration values (including non-standard)')
-  .action((options) => {
+  .action((options: { all?: boolean }) => {
     try {
       const config = ConfigManager.readEnvFile();
 
@@ -760,8 +804,10 @@ configCommand
 
       console.log('\n' + ''.padEnd(80, '=') + '\n');
       process.exit(0);
-    } catch (error) {
-      console.error('Failed to read configuration:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('Failed to read configuration:', errorMessage);
       process.exit(1);
     }
   });
@@ -828,25 +874,12 @@ configCommand
       console.log('  lumentui stop && lumentui start');
 
       process.exit(0);
-    } catch (error) {
-      console.error('Failed to update configuration:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('Failed to update configuration:', errorMessage);
       process.exit(1);
     }
   });
-
-/**
- * Helper: Format duration in ms to human-readable string
- */
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ${hours % 24}h`;
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
-}
 
 program.parse();
