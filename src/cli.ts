@@ -241,108 +241,51 @@ program
   .option('--daemon-only', 'Start only daemon (no TUI)')
   .action(async (options) => {
     try {
-      // Validate environment configuration
-      console.log('🔍 Validating configuration...');
-      const validationResult = CliValidator.validateEnvironment();
+      const React = await esmImport('react');
+      const { render } = await esmImport('ink');
+      const StartFlowModule = await esmImport(
+        path.resolve(__dirname, 'ui/components/StartFlow.js'),
+      );
 
-      if (!validationResult.valid) {
-        console.error('❌ Configuration validation failed:\n');
-        validationResult.errors.forEach((error) => {
-          console.error(`  • ${error}`);
-        });
-        console.error(
-          '\nPlease fix the above errors in your .env file and try again.',
-        );
-        process.exit(1);
-      }
-
-      // Check if daemon is already running
-      const status = PidManager.getDaemonStatus();
-      if (status.isRunning) {
-        console.log(`❌ Daemon is already running (PID: ${status.pid})`);
-        console.log('Use "lumentui stop" to stop it first');
-        process.exit(1);
-      }
-
-      // Ensure data directory exists
-      PidManager.ensureDataDir();
-
-      // Path to compiled daemon
-      const daemonPath = path.join(process.cwd(), 'dist', 'main.js');
-
-      const daemonPathResult = CliValidator.validateFilePath(daemonPath, {
-        shouldExist: true,
-        name: 'Daemon binary',
-      });
-      if (!daemonPathResult.valid) {
-        console.error(`❌ ${daemonPathResult.error}`);
-        console.error('Run: npm run build');
-        process.exit(1);
-      }
-
-      console.log('🚀 Starting daemon...');
-
-      // Fork daemon process
-      const daemon = spawn('node', [daemonPath], {
-        detached: true,
-        stdio: options.daemonOnly ? 'ignore' : 'pipe',
-        env: process.env,
-      });
-
-      // Unref so parent can exit
-      daemon.unref();
-
-      // Save PID
-      PidManager.savePid(daemon.pid!);
-
-      console.log(`✅ Daemon started (PID: ${daemon.pid})`);
-
-      // Wait for IPC to be ready
-      console.log('⏳ Waiting for daemon to be ready...');
-      const isReady = await IpcClient.waitForDaemon(5000);
-
-      if (!isReady) {
-        console.warn('⚠️  Daemon started but IPC not responding');
-        console.log('Check logs at: data/logs/');
-        if (!options.daemonOnly) {
-          process.exit(1);
-        }
-      } else {
-        console.log('✅ Daemon is ready');
-      }
-
-      // Launch TUI if not daemon-only
-      if (!options.daemonOnly) {
-        console.log('\n📺 Launching TUI...\n');
-
-        // Check if TUI exists
-        const tuiPath = path.join(process.cwd(), 'dist', 'ui', 'App.js');
-        if (!fs.existsSync(tuiPath)) {
-          console.warn('⚠️  TUI not built yet. Run: npm run build');
-          console.log('Daemon is running in background.');
-          console.log('Use "lumentui status" to check status');
-          process.exit(0);
-        }
-
-        // Launch TUI
-        try {
-          const { render } = await esmImport('ink');
-          const React = await esmImport('react');
-          const App = await esmImport(path.resolve(__dirname, 'ui/App.js'));
-
-          // Render the TUI
-          render(React.createElement(App.default));
-        } catch (tuiError: any) {
-          console.error('❌ Failed to launch TUI:', tuiError.message);
-          console.log('Daemon is still running in background.');
-          console.log('Use "lumentui stop" to stop the daemon');
-          process.exit(1);
-        }
-      } else {
-        process.exit(0);
-      }
+      render(
+        React.createElement(StartFlowModule.StartFlow, {
+          daemonOnly: !!options.daemonOnly,
+          validateConfig: () => CliValidator.validateEnvironment(),
+          getDaemonStatus: () => PidManager.getDaemonStatus(),
+          ensureDataDir: () => PidManager.ensureDataDir(),
+          getDaemonPath: () => {
+            const daemonPath = path.join(process.cwd(), 'dist', 'main.js');
+            const result = CliValidator.validateFilePath(daemonPath, {
+              shouldExist: true,
+              name: 'Daemon binary',
+            });
+            return {
+              valid: result.valid,
+              path: daemonPath,
+              error: result.error,
+            };
+          },
+          spawnDaemon: (daemonPath: string) => {
+            const daemon = spawn('node', [daemonPath], {
+              detached: true,
+              stdio: options.daemonOnly ? 'ignore' : 'pipe',
+              env: process.env,
+            });
+            daemon.unref();
+            PidManager.savePid(daemon.pid!);
+            return { pid: daemon.pid! };
+          },
+          waitForDaemon: () => IpcClient.waitForDaemon(5000),
+          launchTui: async () => {
+            const AppModule = await esmImport(
+              path.resolve(__dirname, 'ui/App.js'),
+            );
+            render(React.createElement(AppModule.default));
+          },
+        }),
+      );
     } catch (error) {
-      console.error('❌ Failed to start daemon:', error.message);
+      console.error('❌ Failed to start:', error.message);
       process.exit(1);
     }
   });
@@ -406,56 +349,57 @@ program
   .description('Check daemon status')
   .action(async () => {
     try {
-      const status = PidManager.getDaemonStatus();
+      const React = await esmImport('react');
+      const { render } = await esmImport('ink');
+      const StatusViewModule = await esmImport(
+        path.resolve(__dirname, 'ui/components/StatusView.js'),
+      );
 
-      console.log('\n🌟 LumenTUI Status\n');
-      console.log(`Daemon: ${status.isRunning ? '🟢 Running' : '🔴 Stopped'}`);
+      const daemonStatus = PidManager.getDaemonStatus();
+      let ipcReachable: boolean | null = null;
+      let lastPoll: any = null;
 
-      if (status.isRunning) {
-        console.log(`PID: ${status.pid}`);
+      // Render initial loading state
+      const { rerender } = render(
+        React.createElement(StatusViewModule.StatusView, {
+          daemonStatus,
+          ipcReachable: daemonStatus.isRunning ? null : false,
+          lastPoll: null,
+          loading: daemonStatus.isRunning,
+        }),
+      );
 
-        // Check IPC connection
-        const ipcReachable = await IpcClient.isDaemonReachable();
-        console.log(
-          `IPC: ${ipcReachable ? '🟢 Connected' : '🔴 Not responding'}`,
-        );
+      if (daemonStatus.isRunning) {
+        // Check IPC
+        ipcReachable = await IpcClient.isDaemonReachable();
 
-        // Get poll information
+        // Fetch poll data
         try {
-          const app = await NestFactory.createApplicationContext(AppModule, {
-            logger: false,
-          });
-
-          const dbService = app.get(DatabaseService);
+          const nestApp = await NestFactory.createApplicationContext(
+            AppModule,
+            { logger: false },
+          );
+          const dbService = nestApp.get(DatabaseService);
           const polls = dbService.getPolls(1);
-
           if (polls.length > 0) {
-            const lastPoll = polls[0];
-            const lastPollDate = new Date(lastPoll.timestamp);
-            const uptime = Date.now() - lastPoll.timestamp;
-            const uptimeStr = formatDuration(uptime);
-
-            console.log(`\nLast Poll: ${lastPollDate.toLocaleString()}`);
-            console.log(
-              `Status: ${lastPoll.success ? '✅ Success' : '❌ Failed'}`,
-            );
-            console.log(`Products: ${lastPoll.product_count}`);
-            console.log(`New Products: ${lastPoll.new_products}`);
-            console.log(`Duration: ${lastPoll.duration_ms}ms`);
-            if (lastPoll.error) {
-              console.log(`Error: ${lastPoll.error}`);
-            }
+            lastPoll = polls[0];
           }
-
-          await app.close();
-        } catch (error) {
-          console.log('\n⚠️  Could not fetch poll information');
+          await nestApp.close();
+        } catch {
+          // Could not fetch poll info
         }
-      } else {
-        console.log('\nUse "lumentui start" to start the daemon');
+
+        // Re-render with data
+        rerender(
+          React.createElement(StatusViewModule.StatusView, {
+            daemonStatus,
+            ipcReachable,
+            lastPoll,
+            loading: false,
+          }),
+        );
       }
 
-      console.log('');
       process.exit(0);
     } catch (error) {
       console.error('❌ Failed to get status:', error.message);
