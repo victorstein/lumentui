@@ -12,6 +12,11 @@ import { DatabaseService } from './modules/storage/database/database.service';
 import * as path from 'path';
 import * as fs from 'fs';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const packageJson = require(path.resolve(__dirname, '..', 'package.json')) as {
+  version: string;
+};
+
 // Suppress console logs in CLI mode (logs still go to file)
 process.env.LUMENTUI_CLI_MODE = '1';
 
@@ -176,7 +181,7 @@ class CliValidator {
 program
   .name('lumentui')
   .description('🌟 LumenTUI - Monitor shop.lumenalta.com for new products')
-  .version('0.1.0');
+  .version(packageJson.version);
 
 /**
  * Command: lumentui auth
