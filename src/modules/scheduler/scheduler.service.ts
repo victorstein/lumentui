@@ -194,9 +194,6 @@ export class SchedulerService implements OnModuleInit {
 
       this.databaseService.recordPoll(pollMetrics);
 
-      // Emit heartbeat at the end of poll
-      this.ipcGateway.emitHeartbeat(Date.now());
-
       this.logger.log(
         `Poll completed: ${savedCount} products, ${newProducts} new, ${durationMs}ms`,
         'SchedulerService',
@@ -239,6 +236,9 @@ export class SchedulerService implements OnModuleInit {
         error: errorMessage,
       };
     } finally {
+      // Always emit heartbeat so TUI knows daemon is alive,
+      // regardless of poll success/failure
+      this.ipcGateway.emitHeartbeat(Date.now());
       this.isPolling = false;
     }
   }

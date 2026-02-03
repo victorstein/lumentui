@@ -53,6 +53,7 @@ export interface DaemonState {
   logs: LogEntry[];
   error: string | null;
   newProductNotification: Product | null;
+  polling: boolean;
 }
 
 /**
@@ -67,6 +68,7 @@ export const useDaemon = () => {
     logs: [],
     error: null,
     newProductNotification: null,
+    polling: false,
   });
 
   const socketPath = '/tmp/lumentui.sock';
@@ -88,6 +90,10 @@ export const useDaemon = () => {
           connected: true,
           error: null,
         }));
+
+        // Trigger an immediate poll so the UI isn't empty for a full cycle
+        client.emit('force-poll', { timestamp: Date.now() });
+        setState((prev) => ({ ...prev, polling: true }));
       });
 
       // Connection lost
@@ -113,6 +119,7 @@ export const useDaemon = () => {
           setState((prev) => ({
             ...prev,
             products: data.products,
+            polling: false,
           }));
         },
       );
@@ -143,6 +150,7 @@ export const useDaemon = () => {
           setState((prev) => ({
             ...prev,
             error: data.error,
+            polling: false,
           }));
         },
       );
@@ -179,6 +187,7 @@ export const useDaemon = () => {
       ipc.of['lumentui-daemon'].emit('force-poll', {
         timestamp: Date.now(),
       });
+      setState((prev) => ({ ...prev, polling: true }));
     }
   }, []);
 

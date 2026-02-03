@@ -181,8 +181,11 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
    */
   private setupEventHandlers(): void {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    ipc.server.on('connect', () => {
+    ipc.server.on('connect', (socket: unknown) => {
       this.logger.log('TUI client connected');
+      // Send immediate heartbeat so TUI transitions from "Connecting..." to "Connected"
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      ipc.server.emit(socket, 'daemon:heartbeat', { timestamp: Date.now() });
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access

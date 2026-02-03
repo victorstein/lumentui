@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
 import { theme } from '../theme.js';
 import { Product } from '../hooks/useDaemon.js';
 
@@ -25,10 +26,30 @@ export const ProductList: React.FC<ProductListProps> = ({
         flexDirection="column"
         borderStyle="single"
         borderColor={theme.colors.border}
-        padding={1}
+        flexGrow={1}
+        alignItems="center"
+        justifyContent="center"
       >
-        <Text color={theme.colors.textMuted}>No products found.</Text>
-        <Text dimColor>The daemon might still be fetching products...</Text>
+        <Box>
+          <Text color={theme.colors.primary}>
+            <Spinner type="dots" />
+          </Text>
+          <Text color={theme.colors.primary}> Loading products…</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color={theme.colors.textMuted}>
+            Waiting for daemon to fetch product catalog
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Press{' '}
+            <Text color={theme.colors.accent} bold>
+              f
+            </Text>{' '}
+            to force a poll
+          </Text>
+        </Box>
       </Box>
     );
   }
@@ -70,6 +91,7 @@ export const ProductList: React.FC<ProductListProps> = ({
       flexDirection="column"
       borderStyle="single"
       borderColor={theme.colors.border}
+      flexGrow={1}
     >
       {/* Header */}
       <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1}>
@@ -91,7 +113,13 @@ export const ProductList: React.FC<ProductListProps> = ({
       </Box>
 
       {/* Product rows */}
-      <Box flexDirection="column" paddingX={1} paddingY={1}>
+      <Box
+        flexDirection="column"
+        paddingX={1}
+        paddingY={1}
+        flexGrow={1}
+        overflow="hidden"
+      >
         {products.map((product, index) => {
           const isSelected = index === selectedIndex;
 

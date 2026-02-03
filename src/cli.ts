@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { NestFactory } from '@nestjs/core';
 import { spawn } from 'child_process';
 import { AuthService } from './modules/auth/auth.service';
+import { ShopifyService } from './modules/api/shopify/shopify.service';
 import { AppModule } from './app.module';
 import { PidManager } from './common/utils/pid.util';
 import { IpcClient } from './common/utils/ipc-client.util';
@@ -193,15 +194,15 @@ program
       });
 
       const authService = app.get(AuthService);
+      const shopifyService = app.get(ShopifyService);
 
       if (options.check) {
-        // Check if cookies exist and are valid
-        const isValid = authService.validateCookies();
-
-        if (isValid) {
+        // Check if cookies exist and actually work
+        try {
+          await shopifyService.getProducts();
           console.log('✅ Session is valid');
           process.exit(0);
-        } else {
+        } catch {
           console.log('❌ No valid session. Run: lumentui auth');
           process.exit(1);
         }
@@ -230,6 +231,15 @@ program
               authService.saveCookies(
                 cookies as import('./modules/auth/interfaces/cookie.interface').Cookie[],
               ),
+
+            testSession: async () => {
+              try {
+                await shopifyService.getProducts();
+                return true;
+              } catch {
+                return false;
+              }
+            },
             // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
             openBrowser: () => execSync(`open "${url}"`),
           }),

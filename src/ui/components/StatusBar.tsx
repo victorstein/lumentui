@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
 import { theme } from '../theme.js';
 
 interface StatusBarProps {
@@ -7,6 +8,7 @@ interface StatusBarProps {
   productCount: number;
   availableCount: number;
   viewMode: 'list' | 'detail';
+  polling: boolean;
 }
 
 /**
@@ -17,6 +19,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   productCount,
   availableCount,
   viewMode,
+  polling,
 }) => {
   // Calculate next poll time (every minute)
   const getNextPollTime = () => {
@@ -34,7 +37,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   };
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column">
       {/* Stats bar */}
       <Box
         borderStyle="single"
@@ -51,8 +54,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         </Box>
 
         <Box>
-          <Text dimColor>Next poll in: </Text>
-          <Text color={theme.colors.info}>{getNextPollTime()}</Text>
+          {polling ? (
+            <>
+              <Text color={theme.colors.warning}>
+                <Spinner type="dots" />
+              </Text>
+              <Text color={theme.colors.warning}> Polling…</Text>
+            </>
+          ) : (
+            <>
+              <Text dimColor>Next poll in: </Text>
+              <Text color={theme.colors.info}>{getNextPollTime()}</Text>
+            </>
+          )}
         </Box>
 
         <Box>

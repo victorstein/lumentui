@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useApp } from 'ink';
 import { theme } from '../theme.js';
+import { Logo } from './Logo.js';
 
 interface StartFlowProps {
   daemonOnly: boolean;
@@ -218,7 +219,7 @@ export const StartFlow: React.FC<StartFlowProps> = ({
   return (
     <Box flexDirection="column" padding={1}>
       {/* Logo */}
-      <Text color={theme.colors.primary}>{theme.logo}</Text>
+      <Logo />
 
       {/* Card with steps */}
       <Box

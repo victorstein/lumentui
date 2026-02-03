@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useApp } from 'ink';
 import { theme } from '../theme.js';
+import { Logo } from './Logo.js';
 
 type AuthState =
   | 'checking'
@@ -13,6 +14,7 @@ type AuthState =
 interface AuthFlowProps {
   extractCookies: () => Promise<any[]>;
   saveCookies: (cookies: any[]) => Promise<void>;
+  testSession: () => Promise<boolean>;
   openBrowser: () => void;
 }
 
@@ -23,6 +25,7 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 export const AuthFlow: React.FC<AuthFlowProps> = ({
   extractCookies,
   saveCookies,
+  testSession,
   openBrowser,
 }) => {
   const { exit } = useApp();
@@ -31,6 +34,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({
   const [frame, setFrame] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [cookieCount, setCookieCount] = useState(0);
+  const [cookieInvalid, setCookieInvalid] = useState(false);
 
   // Spinner animation
   useEffect(() => {
@@ -44,30 +48,45 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({
     let cancelled = false;
 
     async function run() {
-      // First attempt: check existing cookies
+      // First attempt: check existing cookies and validate with a real request
+      let hasExistingCookie = false;
       try {
         const cookies = await extractCookies();
         if (cancelled) return;
         await saveCookies(cookies);
         setCookieCount(cookies.length);
+        hasExistingCookie = true;
         setState('found');
-        setTimeout(() => {
-          if (!cancelled) {
-            setState('success');
-            setTimeout(() => process.exit(0), 1500);
-          }
-        }, 800);
-        return;
+
+        // Test if the cookie actually works for authenticated requests
+        const isValid = await testSession();
+        if (cancelled) return;
+
+        if (isValid) {
+          setState('success');
+          setTimeout(() => process.exit(0), 1500);
+          return;
+        }
+        // Cookie exists but doesn't work — need login
+        setCookieInvalid(true);
       } catch {
-        // Not found — proceed to browser
+        // Cookie not found at all — need login
       }
 
       if (cancelled) return;
       setState('waiting');
       openBrowser();
 
-      // Poll loop
+      // Poll loop — wait for cookie value to change after login
       const startTime = Date.now();
+      let lastCookieValue = '';
+      try {
+        const existing = await extractCookies();
+        lastCookieValue = existing.map((c: any) => c.value).join(';');
+      } catch {
+        // No cookie yet
+      }
+
       while (Date.now() - startTime < MAX_WAIT_MS && !cancelled) {
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         if (cancelled) return;
@@ -79,11 +98,23 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({
         try {
           const cookies = await extractCookies();
           if (cancelled) return;
-          await saveCookies(cookies);
-          setCookieCount(cookies.length);
-          setState('success');
-          setTimeout(() => process.exit(0), 1500);
-          return;
+          const currentValue = cookies.map((c: any) => c.value).join(';');
+
+          // Only test if the cookie value changed (user logged in)
+          if (currentValue !== lastCookieValue) {
+            lastCookieValue = currentValue;
+            await saveCookies(cookies);
+            setCookieCount(cookies.length);
+
+            const isValid = await testSession();
+            if (cancelled) return;
+
+            if (isValid) {
+              setState('success');
+              setTimeout(() => process.exit(0), 1500);
+              return;
+            }
+          }
         } catch {
           // Keep polling
         }
@@ -114,9 +145,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({
     <Box flexDirection="column" padding={1}>
       {/* Logo */}
       <Box marginBottom={1}>
-        <Text color={theme.colors.primary} bold>
-          {theme.logo}
-        </Text>
+        <Logo />
       </Box>
 
       {/* Auth card */}
@@ -148,17 +177,13 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({
           </Box>
         )}
 
-        {/* Found existing cookies */}
+        {/* Found existing cookies — testing them */}
         {state === 'found' && (
           <Box flexDirection="column">
             <Box>
-              <Text color={theme.colors.success}>
-                {theme.symbols.check} Found {cookieCount} session cookie
-                {cookieCount !== 1 ? 's' : ''}
+              <Text color={theme.colors.info}>
+                {spinner} Found session cookie, verifying...
               </Text>
-            </Box>
-            <Box marginTop={1}>
-              <Text dimColor>Validating...</Text>
             </Box>
           </Box>
         )}
@@ -171,6 +196,15 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({
                 {spinner} Waiting for authentication...
               </Text>
             </Box>
+
+            {cookieInvalid && (
+              <Box marginTop={1}>
+                <Text color={theme.colors.warning}>
+                  {theme.symbols.warning} Cookie found but session is not
+                  authenticated
+                </Text>
+              </Box>
+            )}
 
             <Box marginTop={1} flexDirection="column">
               <Text dimColor>

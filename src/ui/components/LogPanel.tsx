@@ -55,6 +55,7 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
       flexDirection="column"
       borderStyle="single"
       borderColor={theme.colors.border}
+      flexGrow={1}
     >
       {/* Header */}
       <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1}>
@@ -64,7 +65,13 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
       </Box>
 
       {/* Logs */}
-      <Box flexDirection="column" paddingX={1} paddingY={1} height={10}>
+      <Box
+        flexDirection="column"
+        paddingX={1}
+        paddingY={1}
+        flexGrow={1}
+        overflow="hidden"
+      >
         {logs.length === 0 ? (
           <Text color={theme.colors.textMuted}>No logs yet...</Text>
         ) : (

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
+import { Logo } from './Logo.js';
 
 interface HeaderProps {
   connected: boolean;
@@ -40,11 +41,7 @@ export const Header: React.FC<HeaderProps> = ({ connected, lastHeartbeat }) => {
   return (
     <Box flexDirection="column" marginBottom={1}>
       {/* Logo */}
-      <Box>
-        <Text color={theme.colors.primary} bold>
-          {theme.logo}
-        </Text>
-      </Box>
+      <Logo />
 
       {/* Status bar */}
       <Box

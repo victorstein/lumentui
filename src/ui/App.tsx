@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput, useApp, useStdout } from 'ink';
 import { useDaemon } from './hooks/useDaemon.js';
 import { useProducts } from './hooks/useProducts.js';
 import { Header } from './components/Header.js';
@@ -15,6 +15,9 @@ import { theme } from './theme.js';
  */
 const App: React.FC = () => {
   const { exit } = useApp();
+  const { stdout } = useStdout();
+  const terminalHeight = stdout?.rows ?? 24;
+  const terminalWidth = stdout?.columns ?? 80;
 
   // Connect to daemon via IPC
   const {
@@ -23,6 +26,7 @@ const App: React.FC = () => {
     products,
     logs,
     error,
+    polling,
     newProductNotification,
     forcePoll,
     clearError,
@@ -58,9 +62,9 @@ const App: React.FC = () => {
 
     // Toggle view
     if (key.return || input === ' ') {
-      if (viewMode === 'list') {
+      if (viewMode === 'list' && selectedProduct) {
         switchView('detail');
-      } else {
+      } else if (viewMode === 'detail') {
         switchView('list');
       }
     }
@@ -82,7 +86,7 @@ const App: React.FC = () => {
   });
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" height={terminalHeight} width={terminalWidth}>
       {/* Header with logo and status */}
       <Header connected={connected} lastHeartbeat={lastHeartbeat} />
 
@@ -121,10 +125,10 @@ const App: React.FC = () => {
         </Box>
       )}
 
-      {/* Main content area */}
-      <Box flexDirection="row" marginBottom={1}>
-        {/* Left column: Product list or detail */}
-        <Box flexGrow={1} marginRight={1}>
+      {/* Main content area — stacks vertically on narrow terminals */}
+      <Box flexDirection={terminalWidth >= 100 ? 'row' : 'column'} flexGrow={1}>
+        {/* Product list or detail */}
+        <Box flexGrow={1} marginRight={terminalWidth >= 100 ? 1 : 0}>
           {viewMode === 'list' ? (
             <ProductList
               products={filteredProducts}
@@ -137,10 +141,17 @@ const App: React.FC = () => {
           )}
         </Box>
 
-        {/* Right column: Log panel */}
-        <Box width="40%">
-          <LogPanel logs={logs} />
-        </Box>
+        {/* Log panel — side column on wide, bottom section on narrow, hidden on tiny */}
+        {terminalWidth >= 60 && (
+          <Box
+            width={terminalWidth >= 100 ? '40%' : '100%'}
+            height={terminalWidth >= 100 ? undefined : 8}
+            flexDirection="column"
+            flexShrink={0}
+          >
+            <LogPanel logs={logs} />
+          </Box>
+        )}
       </Box>
 
       {/* Bottom status bar */}
@@ -149,6 +160,7 @@ const App: React.FC = () => {
         productCount={stats.total}
         availableCount={stats.available}
         viewMode={viewMode}
+        polling={polling}
       />
     </Box>
   );

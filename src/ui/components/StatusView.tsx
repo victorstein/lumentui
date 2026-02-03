@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
+import { Logo } from './Logo.js';
 
 interface StatusViewProps {
   daemonStatus: { isRunning: boolean; pid?: number };
@@ -43,7 +44,7 @@ export const StatusView: React.FC<StatusViewProps> = ({
   return (
     <Box flexDirection="column" padding={1}>
       {/* Logo */}
-      <Text color={theme.colors.primary}>{theme.logo}</Text>
+      <Logo />
 
       {/* Status Card */}
       <Box
