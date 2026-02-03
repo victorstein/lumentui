@@ -1,9 +1,10 @@
 import * as ipcModule from 'node-ipc';
+import { PathsUtil } from './paths.util';
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const ipc = (ipcModule as any).default || ipcModule;
 
 export class IpcClient {
-  private static readonly SOCKET_PATH = '/tmp/lumentui.sock';
+  private static readonly SOCKET_PATH = PathsUtil.getIpcSocketPath();
   private static readonly CONNECT_TIMEOUT = 3000;
 
   /**

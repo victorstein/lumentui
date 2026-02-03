@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ProductDto } from '../../api/dto/product.dto';
 import { ProductEntity, PollEntity } from '../entities/product.entity';
+import { PathsUtil } from '../../../common/utils/paths.util';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -17,7 +18,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     private readonly logger: LoggerService,
   ) {
     this.dbPath =
-      this.configService.get<string>('DB_PATH') || 'data/lumentui.db';
+      this.configService.get<string>('DB_PATH') || PathsUtil.getDefaultDbPath();
   }
 
   async onModuleInit() {

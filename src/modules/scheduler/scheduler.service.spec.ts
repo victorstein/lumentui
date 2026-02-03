@@ -1,6 +1,7 @@
 /* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { SchedulerService } from './scheduler.service';
 import { ShopifyService } from '../api/shopify/shopify.service';
 import { DatabaseService } from '../storage/database/database.service';
@@ -20,6 +21,7 @@ describe('SchedulerService', () => {
   let ipcGateway: jest.Mocked<IpcGateway>;
   let notificationService: jest.Mocked<NotificationService>;
   let differService: jest.Mocked<DifferService>;
+  let schedulerRegistry: jest.Mocked<SchedulerRegistry>;
 
   // Mock data
   const mockShopifyProducts: ShopifyProduct[] = [
@@ -144,6 +146,12 @@ describe('SchedulerService', () => {
       compare: jest.fn(),
     };
 
+    const mockSchedulerRegistry = {
+      addInterval: jest.fn(),
+      deleteInterval: jest.fn(),
+      getIntervals: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SchedulerService,
@@ -175,6 +183,10 @@ describe('SchedulerService', () => {
           provide: DifferService,
           useValue: mockDifferService,
         },
+        {
+          provide: SchedulerRegistry,
+          useValue: mockSchedulerRegistry,
+        },
       ],
     }).compile();
 
@@ -184,6 +196,7 @@ describe('SchedulerService', () => {
     configService = module.get(ConfigService);
     loggerService = module.get(LoggerService);
     ipcGateway = module.get(IpcGateway);
+    schedulerRegistry = module.get(SchedulerRegistry);
     notificationService = module.get(NotificationService);
     differService = module.get(DifferService);
   });
@@ -197,8 +210,24 @@ describe('SchedulerService', () => {
   });
 
   describe('setupPolls', () => {
-    it('should initialize poll configuration', () => {
-      configService.get.mockReturnValue('*/30 * * * *');
+    beforeEach(() => {
+      // Clear any existing interval
+      if ((service as any).pollIntervalHandle) {
+        clearInterval((service as any).pollIntervalHandle);
+        (service as any).pollIntervalHandle = null;
+      }
+    });
+
+    afterEach(() => {
+      // Clean up interval after each test
+      if ((service as any).pollIntervalHandle) {
+        clearInterval((service as any).pollIntervalHandle);
+        (service as any).pollIntervalHandle = null;
+      }
+    });
+
+    it('should initialize poll configuration with custom interval', () => {
+      configService.get.mockReturnValue(30); // 30 seconds
       databaseService.getProducts.mockReturnValue([]);
 
       service.setupPolls();
@@ -207,24 +236,36 @@ describe('SchedulerService', () => {
         'Setting up automatic polls',
         'SchedulerService',
       );
-      expect(configService.get).toHaveBeenCalledWith('POLL_INTERVAL');
+      expect(configService.get).toHaveBeenCalledWith('LUMENTUI_POLL_INTERVAL');
       expect(databaseService.getProducts).toHaveBeenCalledWith({ limit: 1 });
+      expect(schedulerRegistry.addInterval).toHaveBeenCalledWith(
+        'auto-poll',
+        expect.any(Object),
+      );
+      expect(loggerService.log).toHaveBeenCalledWith(
+        'Polls configured with interval: 30 seconds (30000ms)',
+        'SchedulerService',
+      );
     });
 
-    it('should use default interval if not configured', () => {
+    it('should use default interval (60s) if not configured', () => {
       configService.get.mockReturnValue(undefined);
       databaseService.getProducts.mockReturnValue([]);
 
       service.setupPolls();
 
       expect(loggerService.log).toHaveBeenCalledWith(
-        expect.stringContaining('*/30 * * * *'),
+        'Polls configured with interval: 60 seconds (60000ms)',
         'SchedulerService',
+      );
+      expect(schedulerRegistry.addInterval).toHaveBeenCalledWith(
+        'auto-poll',
+        expect.any(Object),
       );
     });
 
     it('should log existing products status', () => {
-      configService.get.mockReturnValue('*/30 * * * *');
+      configService.get.mockReturnValue(60);
       databaseService.getProducts.mockReturnValue(mockExistingProducts);
 
       service.setupPolls();
@@ -233,6 +274,43 @@ describe('SchedulerService', () => {
         expect.stringContaining('existing'),
         'SchedulerService',
       );
+    });
+  });
+
+  describe('onModuleDestroy', () => {
+    it('should clean up polling interval when destroyed', () => {
+      // Setup an interval first
+      configService.get.mockReturnValue(60);
+      databaseService.getProducts.mockReturnValue([]);
+      service.setupPolls();
+
+      // Verify interval was created
+      expect((service as any).pollIntervalHandle).toBeTruthy();
+      expect(schedulerRegistry.addInterval).toHaveBeenCalledWith(
+        'auto-poll',
+        expect.any(Object),
+      );
+
+      // Destroy the service
+      service.onModuleDestroy();
+
+      // Verify cleanup
+      expect(schedulerRegistry.deleteInterval).toHaveBeenCalledWith(
+        'auto-poll',
+      );
+      expect((service as any).pollIntervalHandle).toBeNull();
+      expect(loggerService.log).toHaveBeenCalledWith(
+        'Automatic polling stopped',
+        'SchedulerService',
+      );
+    });
+
+    it('should handle destroy when no interval exists', () => {
+      // Don't setup an interval
+      (service as any).pollIntervalHandle = null;
+
+      // Should not throw
+      expect(() => service.onModuleDestroy()).not.toThrow();
     });
   });
 

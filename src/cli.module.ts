@@ -4,6 +4,7 @@ import { LoggerModule } from './common/logger/logger.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ApiModule } from './modules/api/api.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { PathsUtil } from './common/utils/paths.util';
 
 /**
  * Lightweight module for CLI commands.
@@ -14,7 +15,8 @@ import { StorageModule } from './modules/storage/storage.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: PathsUtil.getEnvFilePath(),
+      ignoreEnvFile: !PathsUtil.isDevMode(), // Skip .env file in production if it doesn't exist
     }),
     LoggerModule,
     AuthModule,

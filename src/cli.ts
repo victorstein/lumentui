@@ -9,13 +9,9 @@ import { CliModule } from './cli.module';
 import { PidManager } from './common/utils/pid.util';
 import { IpcClient } from './common/utils/ipc-client.util';
 import { DatabaseService } from './modules/storage/database/database.service';
+import { PathsUtil } from './common/utils/paths.util';
 import * as path from 'path';
 import * as fs from 'fs';
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const packageJson = require(path.resolve(__dirname, '..', 'package.json')) as {
-  version: string;
-};
 
 // Suppress console logs in CLI mode (logs still go to file)
 process.env.LUMENTUI_CLI_MODE = '1';
@@ -181,7 +177,7 @@ class CliValidator {
 program
   .name('lumentui')
   .description('🌟 LumenTUI - Monitor shop.lumenalta.com for new products')
-  .version(packageJson.version);
+  .version(PathsUtil.getVersion());
 
 /**
  * Command: lumentui auth
@@ -288,7 +284,7 @@ program
           getDaemonStatus: () => PidManager.getDaemonStatus(),
           ensureDataDir: () => PidManager.ensureDataDir(),
           getDaemonPath: () => {
-            const daemonPath = path.join(process.cwd(), 'dist', 'main.js');
+            const daemonPath = PathsUtil.getDaemonPath();
             const result = CliValidator.validateFilePath(daemonPath, {
               shouldExist: true,
               name: 'Daemon binary',
@@ -496,7 +492,7 @@ program
   .option('-n, --lines <number>', 'Number of lines to show', '50')
   .action((options: { follow?: boolean; lines: string }) => {
     try {
-      const logDir = path.join(process.cwd(), 'data', 'logs');
+      const logDir = path.join(PathsUtil.getDataDir(), 'logs');
       const logFiles = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
 
       if (logFiles.length === 0) {
@@ -611,7 +607,7 @@ const configCommand = program
  * Config utilities
  */
 class ConfigManager {
-  private static readonly ENV_FILE = path.join(process.cwd(), '.env');
+  private static readonly ENV_FILE = PathsUtil.getEnvFilePath();
 
   // Known configuration keys with validation rules
   private static readonly CONFIG_SCHEMA: Record<

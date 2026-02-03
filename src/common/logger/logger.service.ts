@@ -1,6 +1,8 @@
 import { Injectable, LoggerService as NestLoggerService } from '@nestjs/common';
 import * as winston from 'winston';
 import { ConfigService } from '@nestjs/config';
+import { PathsUtil } from '../utils/paths.util';
+import * as path from 'path';
 
 @Injectable()
 export class LoggerService implements NestLoggerService {
@@ -10,8 +12,12 @@ export class LoggerService implements NestLoggerService {
     const logLevel = this.configService.get<string>('LOG_LEVEL', 'info');
     const logFile = this.configService.get<string>(
       'LOG_FILE',
-      'data/logs/app.log',
+      PathsUtil.getDefaultLogPath(),
     );
+
+    // Ensure log directory exists
+    const logDir = path.dirname(logFile);
+    PathsUtil.ensureDir(logDir);
 
     const transports: winston.transport[] = [
       // File transport (always active)

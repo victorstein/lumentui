@@ -1,6 +1,6 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { LoggerService } from '../../common/logger/logger.service';
 import { ShopifyService } from '../api/shopify/shopify.service';
 import { DatabaseService } from '../storage/database/database.service';
@@ -12,9 +12,10 @@ import { DifferService } from '../differ/differ.service';
 import { StorageNormalizer } from '../storage/utils/storage-normalizer.util';
 
 @Injectable()
-export class SchedulerService implements OnModuleInit {
+export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly SHOPIFY_URL = 'https://shop.lumenalta.com';
   private isPolling = false;
+  private pollIntervalHandle: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly shopifyService: ShopifyService,
@@ -24,6 +25,7 @@ export class SchedulerService implements OnModuleInit {
     private readonly ipcGateway: IpcGateway,
     private readonly notificationService: NotificationService,
     private readonly differService: DifferService,
+    private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
 
   onModuleInit() {
@@ -33,6 +35,17 @@ export class SchedulerService implements OnModuleInit {
     this.ipcGateway.setSchedulerService(this);
   }
 
+  onModuleDestroy() {
+    this.logger.log('SchedulerService shutting down', 'SchedulerService');
+    // Clean up the polling interval
+    if (this.pollIntervalHandle) {
+      clearInterval(this.pollIntervalHandle);
+      this.schedulerRegistry.deleteInterval('auto-poll');
+      this.pollIntervalHandle = null;
+      this.logger.log('Automatic polling stopped', 'SchedulerService');
+    }
+  }
+
   /**
    * Setup polling configuration
    * Load active products and configure scheduling
@@ -40,11 +53,15 @@ export class SchedulerService implements OnModuleInit {
   setupPolls(): void {
     this.logger.log('Setting up automatic polls', 'SchedulerService');
 
-    const pollInterval =
-      this.configService.get<string>('POLL_INTERVAL') || '*/30 * * * *';
+    // Read poll interval in seconds (default: 60 seconds = 1 minute)
+    const pollIntervalSeconds =
+      this.configService.get<number>('LUMENTUI_POLL_INTERVAL') || 60;
+
+    // Convert to milliseconds
+    const pollIntervalMs = pollIntervalSeconds * 1000;
 
     this.logger.log(
-      `Polls configured with interval: ${pollInterval}`,
+      `Polls configured with interval: ${pollIntervalSeconds} seconds (${pollIntervalMs}ms)`,
       'SchedulerService',
     );
 
@@ -54,18 +71,20 @@ export class SchedulerService implements OnModuleInit {
       `Database contains ${products.length > 0 ? 'existing' : 'no'} products`,
       'SchedulerService',
     );
-  }
 
-  /**
-   * Automatic poll triggered by cron
-   * Runs every 1 minute by default
-   */
-  @Cron(CronExpression.EVERY_MINUTE, {
-    name: 'auto-poll',
-  })
-  async handleAutomaticPoll(): Promise<void> {
-    this.logger.log('Automatic poll triggered', 'SchedulerService');
-    await this.handlePoll();
+    // Create dynamic interval for automatic polling
+    this.pollIntervalHandle = setInterval(async () => {
+      this.logger.log('Automatic poll triggered', 'SchedulerService');
+      await this.handlePoll();
+    }, pollIntervalMs);
+
+    // Register with SchedulerRegistry for management
+    this.schedulerRegistry.addInterval('auto-poll', this.pollIntervalHandle);
+
+    this.logger.log(
+      `Automatic polling started with ${pollIntervalSeconds}s interval`,
+      'SchedulerService',
+    );
   }
 
   /**
