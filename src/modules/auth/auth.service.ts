@@ -22,18 +22,16 @@ export class AuthService {
       const profile =
         this.configService.get<string>('CHROME_PROFILE') || 'Default';
 
-      // Extract cookies from Chrome
-      const cookies = await getCookiesForUrl(url, profile);
+      // Extract cookies from Chrome — try the given URL first,
+      // then fall back to the clevertech.biz alias (same Shopify store)
+      const urls = [url, 'https://shop.clevertech.biz'];
+      let sessionCookies: Cookie[] = [];
 
-      // Filter for Shopify session cookies needed for authenticated access
-      const sessionCookieNames = [
-        '_shopify_essential',
-        '_shopify_y',
-        'storefront_digest',
-      ];
-      const sessionCookies = cookies.filter((c) =>
-        sessionCookieNames.includes(c.name),
-      );
+      for (const tryUrl of urls) {
+        const cookies = await getCookiesForUrl(tryUrl, profile);
+        sessionCookies = cookies.filter((c) => c.name === '_shopify_essential');
+        if (sessionCookies.length > 0) break;
+      }
 
       if (sessionCookies.length === 0) {
         throw new AuthException(
@@ -97,19 +95,6 @@ export class AuthService {
         throw new AuthException('No cookies found. Please run: lumentui auth');
       }
 
-      // Validate cookie expiration
-      const expiredCookies = cookies.filter((c) => this.isCookieExpired(c));
-
-      if (expiredCookies.length > 0) {
-        this.logger.warn(
-          `${expiredCookies.length} cookie(s) expired, re-authentication required`,
-          'AuthService',
-        );
-        throw new AuthException(
-          'Session expired. Please re-authenticate with: lumentui auth',
-        );
-      }
-
       // Convert to Cookie header format for API calls
       const cookieHeader = cookies
         .map((c) => `${c.name}=${c.value}`)
@@ -136,17 +121,6 @@ export class AuthService {
    * @param cookie Cookie object
    * @returns true if cookie is expired, false otherwise
    */
-  private isCookieExpired(cookie: Cookie): boolean {
-    // If expires is 0 or not set, cookie doesn't expire
-    if (!cookie.expires || cookie.expires === 0) {
-      return false;
-    }
-
-    // expires is in seconds since epoch, compare with current time
-    const nowInSeconds = Math.floor(Date.now() / 1000);
-    return cookie.expires < nowInSeconds;
-  }
-
   validateCookies(): boolean {
     try {
       const cookieHeader = this.loadCookies();
@@ -154,5 +128,10 @@ export class AuthService {
     } catch {
       return false;
     }
+  }
+
+  logout(): boolean {
+    this.logger.log('Clearing stored cookies', 'AuthService');
+    return this.cookieStorage.clearCookies();
   }
 }

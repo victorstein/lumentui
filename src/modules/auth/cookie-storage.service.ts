@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+} from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { machineIdSync } from 'node-machine-id';
@@ -144,5 +150,17 @@ export class CookieStorageService {
     }
 
     return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+  }
+
+  /**
+   * Delete stored cookies
+   * Returns true if cookies were deleted, false if none existed
+   */
+  clearCookies(): boolean {
+    if (!existsSync(this.COOKIE_FILE)) {
+      return false;
+    }
+    unlinkSync(this.COOKIE_FILE);
+    return true;
   }
 }

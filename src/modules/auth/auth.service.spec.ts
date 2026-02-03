@@ -59,7 +59,7 @@ describe('AuthService', () => {
     it('should extract storefront_digest cookie successfully', async () => {
       const mockCookies = [
         {
-          name: 'storefront_digest',
+          name: '_shopify_essential',
           value: 'test-cookie-value',
           domain: 'shop.lumenalta.com',
           path: '/',
@@ -197,55 +197,6 @@ describe('AuthService', () => {
       expect(() => service.loadCookies()).toThrow('No cookies found');
     });
 
-    it('should throw error when cookies are expired', () => {
-      const expiredCookie = [
-        {
-          name: 'storefront_digest',
-          value: 'expired-value',
-          domain: 'shop.lumenalta.com',
-          path: '/',
-          expires: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
-        },
-      ];
-
-      (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
-        expiredCookie,
-      );
-
-      expect(() => service.loadCookies()).toThrow(AuthException);
-      expect(() => service.loadCookies()).toThrow('Session expired');
-      expect(loggerService.warn).toHaveBeenCalledWith(
-        expect.stringContaining('expired'),
-        'AuthService',
-      );
-    });
-
-    it('should handle multiple cookies with some expired', () => {
-      const mockCookies = [
-        {
-          name: 'valid-cookie',
-          value: 'value1',
-          domain: 'test.com',
-          path: '/',
-          expires: Math.floor(Date.now() / 1000) + 3600, // Valid
-        },
-        {
-          name: 'expired-cookie',
-          value: 'value2',
-          domain: 'test.com',
-          path: '/',
-          expires: Math.floor(Date.now() / 1000) - 3600, // Expired
-        },
-      ];
-
-      (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
-        mockCookies,
-      );
-
-      expect(() => service.loadCookies()).toThrow(AuthException);
-      expect(() => service.loadCookies()).toThrow('Session expired');
-    });
-
     it('should handle cookies with no expiration (expires = 0)', () => {
       const nonExpiringCookie = [
         {
@@ -295,8 +246,8 @@ describe('AuthService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false when cookies are expired', () => {
-      const expiredCookie = [
+    it('should return true even with old cookies (no expiration check)', () => {
+      const oldCookie = [
         {
           name: 'test',
           value: 'value',
@@ -307,12 +258,12 @@ describe('AuthService', () => {
       ];
 
       (cookieStorageService.loadCookies as jest.Mock).mockReturnValue(
-        expiredCookie,
+        oldCookie,
       );
 
       const result = service.validateCookies();
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
     });
   });
 });

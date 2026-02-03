@@ -366,6 +366,35 @@ program
   });
 
 /**
+ * Command: lumentui logout
+ * Clear stored authentication cookies
+ */
+program
+  .command('logout')
+  .description('Clear stored authentication cookies')
+  .action(async () => {
+    try {
+      const app = await NestFactory.createApplicationContext(AppModule, {
+        logger: false,
+      });
+      const authService = app.get(AuthService);
+      const cleared = authService.logout();
+
+      if (cleared) {
+        console.log('✅ Logged out successfully. Cookies cleared.');
+      } else {
+        console.log('ℹ️  No stored cookies found.');
+      }
+      process.exit(0);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Logout failed:', errorMessage);
+      process.exit(1);
+    }
+  });
+
+/**
  * Command: lumentui status
  * Check daemon status and display information
  */
