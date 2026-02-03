@@ -16,9 +16,10 @@ LumenTUI is a **single-package TypeScript application** with three components:
 **Build commands**:
 
 ```bash
-ppnpm run build           # Full build (daemon + CLI + TUI)
-ppnpm run build:cli       # CLI only
-ppnpm run build:ui        # TUI only
+pnpm run build           # Full build (daemon + CLI + TUI)
+pnpm run build:daemon    # Daemon only (NestJS)
+pnpm run build:cli       # CLI only
+pnpm run build:ui        # TUI only
 pnpm test                # Run all tests
 pnpm run test:watch      # Watch mode
 pnpm run lint            # ESLint
