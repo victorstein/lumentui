@@ -16,25 +16,25 @@ LumenTUI is a **single-package TypeScript application** with three components:
 **Build commands**:
 
 ```bash
-npm run build           # Full build (daemon + CLI + TUI)
-npm run build:cli       # CLI only
-npm run build:ui        # TUI only
-npm test                # Run all tests
-npm run test:watch      # Watch mode
-npm run lint            # ESLint
-npm run format          # Prettier
+ppnpm run build           # Full build (daemon + CLI + TUI)
+ppnpm run build:cli       # CLI only
+ppnpm run build:ui        # TUI only
+pnpm test                # Run all tests
+pnpm run test:watch      # Watch mode
+pnpm run lint            # ESLint
+pnpm run format          # Prettier
 ```
 
 ### Package Manager
 
-Use `npm` exclusively. The project uses npm, not pnpm or yarn.
+Use `pnpm` exclusively. The project uses pnpm, not npm or yarn.
 
 ### TypeScript
 
 - No `// @ts-ignore`, `// @ts-expect-error`, `// eslint-disable` (except where absolutely necessary with justification)
 - No `as any` or `as never`
-- Run `npm run build` after changes to verify compilation
-- Run `npm test` to verify all tests pass
+- Run `pnpm run build` after changes to verify compilation
+- Run `pnpm test` to verify all tests pass
 
 ### Environment Configuration
 
@@ -57,7 +57,7 @@ Use `npm` exclusively. The project uses npm, not pnpm or yarn.
 - **Coverage**: Maintain >90% code coverage
 - **Mocking**: Use Jest mocks, avoid `as any` (use proper mock types)
 - **Test structure**: Arrange-Act-Assert pattern
-- Run tests before committing: `npm test`
+- Run tests before committing: `pnpm test`
 
 ### Git Operations
 
@@ -190,17 +190,17 @@ bd sync
 
 ### Handle Directly (Do NOT Delegate)
 
-| Task Type         | What To Do                                                |
-| ----------------- | --------------------------------------------------------- |
-| Beads operations  | `bd ready`, `bd list`, `bd update`, `bd close`, `bd sync` |
-| Git operations    | commits, branches, merges (after user confirmation)       |
-| GitHub operations | issues, PRs (use `gh` CLI or GitHub MCP tools)            |
-| Running tests     | `npm test`, `npm run test:watch`                          |
-| Running builds    | `npm run build`, `npm run build:cli`, `npm run build:ui`  |
-| Type checking     | `npm run build` (TypeScript compilation)                  |
-| Linting           | `npm run lint`, `npm run format`                          |
-| Simple file reads | When you just need to check a single value                |
-| General questions | Answer directly about the project                         |
+| Task Type         | What To Do                                                  |
+| ----------------- | ----------------------------------------------------------- |
+| Beads operations  | `bd ready`, `bd list`, `bd update`, `bd close`, `bd sync`   |
+| Git operations    | commits, branches, merges (after user confirmation)         |
+| GitHub operations | issues, PRs (use `gh` CLI or GitHub MCP tools)              |
+| Running tests     | `pnpm test`, `pnpm run test:watch`                          |
+| Running builds    | `pnpm run build`, `pnpm run build:cli`, `pnpm run build:ui` |
+| Type checking     | `pnpm run build` (TypeScript compilation)                   |
+| Linting           | `pnpm run lint`, `pnpm run format`                          |
+| Simple file reads | When you just need to check a single value                  |
+| General questions | Answer directly about the project                           |
 
 **Remember**: If it involves writing or modifying application code, DELEGATE. Only handle operational tasks yourself.
 
@@ -424,9 +424,9 @@ When an agent completes a task that involves **code changes**:
 1. **Agent returns** with completion status
 2. **Run quality checks**:
    ```bash
-   npm run build          # Verify TypeScript compilation
-   npm test               # Run all tests
-   npm run lint           # Check ESLint
+   pnpm run build          # Verify TypeScript compilation
+   pnpm test               # Run all tests
+   pnpm run lint           # Check ESLint
    ```
 3. **Based on results**:
    - **All pass**: `bd close <id> --reason="Completed, all checks pass"` then `bd sync`
@@ -550,7 +550,7 @@ All paths managed by `PathsUtil` - never hardcode paths.
 
 2. Agent creates service + tests
 
-3. Verify: `npm run build && npm test`
+3. Verify: `pnpm run build && pnpm test`
 
 ### Adding a New CLI Command
 
@@ -570,7 +570,7 @@ All paths managed by `PathsUtil` - never hardcode paths.
 
 2. Agent updates `src/cli.ts`
 
-3. Test: `npm run build:cli && ./dist/cli.js [command] --help`
+3. Test: `pnpm run build:cli && ./dist/cli.js [command] --help`
 
 ### Adding a New TUI Component
 
@@ -588,7 +588,7 @@ All paths managed by `PathsUtil` - never hardcode paths.
 
 2. Agent creates component + hook
 
-3. Test manually: `npm run build:ui && lumentui start`
+3. Test manually: `pnpm run build:ui && lumentui start`
 
 ### Cross-Platform File Operations
 
@@ -620,13 +620,13 @@ Before closing any task with code changes, verify:
 
 ```bash
 # 1. TypeScript compilation
-npm run build
+pnpm run build
 
 # 2. All tests pass
-npm test
+pnpm test
 
 # 3. Linting passes
-npm run lint
+pnpm run lint
 
 # 4. No type errors
 # (covered by build step)
@@ -657,7 +657,7 @@ Delegate to `@explore` to understand IPC architecture (Unix sockets via `node-ip
 
 ```bash
 # Build everything
-npm run build
+pnpm run build
 
 # Run CLI
 ./dist/cli.js --help
@@ -730,7 +730,7 @@ git status
 1. **Start Session**: `bd ready` to find work
 2. **Claim Task**: `bd update <id> --status=in_progress`
 3. **Delegate**: Give task context to specialized agent
-4. **Quality Check**: `npm run build && npm test && npm run lint`
+4. **Quality Check**: `pnpm run build && pnpm test && pnpm run lint`
 5. **Close Task**: `bd close <id> --reason="..."`
 6. **Sync Beads**: `bd sync`
 7. **End Session**: Follow Session Close Protocol (git add, bd sync, git commit, bd sync, git push)

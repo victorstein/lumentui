@@ -24,7 +24,7 @@
     "lumentui": "./dist/cli.js"
   },
   "scripts": {
-    "build": "nest build && npm run build:cli && npm run build:ui",
+    "build": "nest build && npm run build:cli --loglevel=error && npm run build:ui --loglevel=error",
     "build:cli": "tsc -p tsconfig.cli.json && chmod +x dist/cli.js",
     "build:ui": "rm -f tsconfig.ui.tsbuildinfo && tsc -p tsconfig.ui.json && echo '{\"type\":\"module\"}' > dist/ui/package.json",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
