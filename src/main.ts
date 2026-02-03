@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { LoggerService } from './common/logger/logger.service';
 import { IpcGateway } from './modules/ipc/ipc.gateway';
+import { PidManager } from './common/utils/pid.util';
 
 async function bootstrap() {
   // Create application context (no HTTP server)
@@ -24,6 +25,11 @@ async function bootstrap() {
   const ipcStatus = ipcGateway.getStatus();
   logger.log(`IPC server listening at ${ipcStatus.socketPath}`, 'Bootstrap');
 
+  // Create PID file
+  PidManager.ensureDataDir();
+  PidManager.savePid(process.pid);
+  logger.log(`PID file created: ${process.pid}`, 'Bootstrap');
+
   // Handle graceful shutdown
   const shutdown = async (signal: string) => {
     logger.log(`Received ${signal}, shutting down gracefully...`, 'Bootstrap');
@@ -36,6 +42,9 @@ async function bootstrap() {
     forceExitTimeout.unref();
 
     await app.close();
+
+    // Remove PID file
+    PidManager.removePidFile();
 
     // Clean up socket file after all modules have finished destroying
     ipcGateway.cleanupSocket();
