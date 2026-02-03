@@ -186,6 +186,7 @@ bd sync
 | "How should I build X?" / Complex features             | `@planning`    |
 | "Where is X?" / "How does X work?"                     | `@explore`     |
 | Review code before pushing                             | `@code-review` |
+| Create a new release / publish to npm / GitHub release | `@release`     |
 
 ### Handle Directly (Do NOT Delegate)
 
@@ -368,6 +369,24 @@ Use the appropriate patterns for implementation.
   - Pre-push review
   - Checking types/lint/tests
   - Verifying code follows patterns
+
+### @release
+
+- **Purpose**: Complete release process for npm, GitHub, and Homebrew
+- **Codebase**: `package.json`, `HOMEBREW_SETUP.md`, `DEPLOYMENT.md`
+- **Use for**:
+  - Creating new releases (patch, minor, major)
+  - Publishing to npm registry
+  - Creating GitHub releases with tags
+  - Updating Homebrew formula
+  - Post-release verification
+- **Key tasks**:
+  - Pre-release quality checks (tests, coverage, lint, build)
+  - Version bumping with `npm version`
+  - npm publishing workflow
+  - GitHub release creation with release notes
+  - Homebrew tap formula updates
+  - Rollback procedures if needed
 
 ---
 
