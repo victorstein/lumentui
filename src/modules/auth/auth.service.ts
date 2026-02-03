@@ -92,7 +92,7 @@ export class AuthService {
       const cookies = this.cookieStorage.loadCookies();
 
       if (!cookies || cookies.length === 0) {
-        throw new AuthException('No cookies found. Please run: lumentui auth');
+        throw new AuthException('No cookies found. Please run: lumentui login');
       }
 
       // Convert to Cookie header format for API calls
@@ -112,7 +112,7 @@ export class AuthService {
 
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error('Failed to load cookies', errorStack, 'AuthService');
-      throw new AuthException('No cookies found. Please run: lumentui auth');
+      throw new AuthException('No cookies found. Please run: lumentui login');
     }
   }
 

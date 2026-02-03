@@ -334,7 +334,7 @@ def caveats
     LumentuiAPI requires configuration before use:
 
     1. Set up authentication:
-       $ lumentui auth
+       $ lumentui login
 
     2. Configure macOS notifications in:
        ~/.lumentui/.env

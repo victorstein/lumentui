@@ -141,7 +141,7 @@ export class ShopifyService implements OnModuleInit {
 
       if (status === 401 || status === 403) {
         throw new ShopifyAuthException(
-          'Authentication failed. Please re-run: lumentui auth',
+          'Authentication failed. Please re-run: lumentui login',
         );
       }
 

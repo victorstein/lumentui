@@ -169,10 +169,10 @@ npm run start:prod
 
 ```bash
 # Authenticate with shop.lumenalta.com
-lumentui auth
+lumentui login
 
 # Verify current session
-lumentui auth --check
+lumentui login --check
 
 # Start daemon + TUI (planned)
 lumentui start

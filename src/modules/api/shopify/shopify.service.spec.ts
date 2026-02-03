@@ -165,7 +165,7 @@ describe('ShopifyService', () => {
 
       await expect(service.getProducts()).rejects.toThrow(ShopifyAuthException);
       await expect(service.getProducts()).rejects.toThrow(
-        'Authentication failed. Please re-run: lumentui auth',
+        'Authentication failed. Please re-run: lumentui login',
       );
       expect(loggerService.error).toHaveBeenCalled();
     });

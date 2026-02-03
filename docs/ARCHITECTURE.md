@@ -141,7 +141,7 @@ export class AuthService {
 ```
 User
   │
-  ├─> CLI: lumentui auth
+  ├─> CLI: lumentui login
   │
   └─> AuthService.extractCookies()
         │
@@ -500,7 +500,7 @@ socket.emit('status', {}, (response) => {
 │  Step 1: Authentication                                      │
 └─────────────────────────────────────────────────────────────┘
                          │
-   User runs: lumentui auth
+   User runs: lumentui login
                          │
                          ▼
    AuthService.extractCookies() → Chrome Keychain

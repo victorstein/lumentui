@@ -74,7 +74,7 @@ Options:
   -h, --help         display help for command
 
 Commands:
-  auth [options]     Authenticate with shop.lumenalta.com
+  login [options]    Authenticate with shop.lumenalta.com
   start              Start daemon and TUI
   stop               Stop daemon
   status             Check daemon status
@@ -101,14 +101,14 @@ lumentui -V
 
 ## 🔐 Authentication Commands
 
-### `auth` - Authenticate with Shopify
+### `login` - Authenticate with Shopify
 
 Extract and store cookies from Chrome for shop.lumenalta.com.
 
 #### Basic Usage
 
 ```bash
-lumentui auth
+lumentui login
 ```
 
 **What happens:**
@@ -138,7 +138,7 @@ lumentui auth
 Verify if your stored session is still valid.
 
 ```bash
-lumentui auth --check
+lumentui login --check
 ```
 
 **Output (valid session):**
@@ -150,7 +150,7 @@ lumentui auth --check
 **Output (invalid/expired session):**
 
 ```
-❌ No valid session. Run: lumentui auth
+❌ No valid session. Run: lumentui login
 ```
 
 **Exit codes:**
@@ -164,7 +164,7 @@ Clear existing cookies and re-authenticate.
 
 ```bash
 rm data/cookies.json
-lumentui auth
+lumentui login
 ```
 
 ---
@@ -867,8 +867,8 @@ lumentui logs --level=error --lines=50
 
 # Re-authenticate
 rm data/cookies.json
-lumentui auth --check
-lumentui auth
+lumentui login --check
+lumentui login
 
 # Restart daemon
 lumentui stop
@@ -896,19 +896,19 @@ lumentui start
 ### Command-specific Help
 
 ```bash
-lumentui auth --help
+lumentui login --help
 lumentui start --help
 lumentui list --help
 ```
 
 ### Common Issues
 
-| Issue               | Command                 | Solution                 |
-| ------------------- | ----------------------- | ------------------------ |
-| Daemon won't start  | `lumentui doctor`       | Check diagnostics output |
-| Cookies expired     | `lumentui auth --check` | Re-authenticate          |
-| No products showing | `lumentui logs -n 50`   | Check API errors         |
-| High memory usage   | `lumentui status`       | Check uptime, restart    |
+| Issue               | Command                  | Solution                 |
+| ------------------- | ------------------------ | ------------------------ |
+| Daemon won't start  | `lumentui doctor`        | Check diagnostics output |
+| Cookies expired     | `lumentui login --check` | Re-authenticate          |
+| No products showing | `lumentui logs -n 50`    | Check API errors         |
+| High memory usage   | `lumentui status`        | Check uptime, restart    |
 
 ### Support
 

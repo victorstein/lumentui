@@ -180,11 +180,12 @@ program
   .version(PathsUtil.getVersion());
 
 /**
- * Command: lumentui auth
+ * Command: lumentui login
  * Extract cookies from Chrome Keychain and validate
  */
 program
-  .command('auth')
+  .command('login')
+  .alias('auth')
   .description('Authenticate with shop.lumenalta.com')
   .option('--check', 'Verify current session')
   .action(async (options: { check?: boolean }) => {
@@ -204,7 +205,7 @@ program
           console.log('✅ Session is valid');
           process.exit(0);
         } catch {
-          console.log('❌ No valid session. Run: lumentui auth');
+          console.log('❌ No valid session. Run: lumentui login');
           process.exit(1);
         }
       } else {

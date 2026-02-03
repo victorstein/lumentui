@@ -285,7 +285,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({
               <Text dimColor>
                 Please log in to shop.lumenalta.com in Chrome and run{' '}
                 <Text color={theme.colors.accent} bold>
-                  lumentui auth
+                  lumentui login
                 </Text>{' '}
                 again.
               </Text>
