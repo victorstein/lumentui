@@ -24,11 +24,6 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
     );
   }
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
-
   return (
     <Box
       flexDirection="column"
@@ -46,16 +41,16 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
       {/* Basic Info */}
       <Box flexDirection="column" marginBottom={1}>
         <Box>
-          <Text dimColor>Vendor: </Text>
-          <Text>{product.vendor}</Text>
-        </Box>
-        <Box>
-          <Text dimColor>Type: </Text>
-          <Text>{product.productType}</Text>
-        </Box>
-        <Box>
           <Text dimColor>Handle: </Text>
           <Text color={theme.colors.textDim}>{product.handle}</Text>
+        </Box>
+        <Box>
+          <Text dimColor>Price: </Text>
+          <Text color={theme.colors.accent}>${product.price.toFixed(2)}</Text>
+        </Box>
+        <Box>
+          <Text dimColor>URL: </Text>
+          <Text color={theme.colors.info}>{product.url}</Text>
         </Box>
       </Box>
 
@@ -73,6 +68,18 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
         )}
       </Box>
 
+      {/* Description */}
+      {product.description && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold color={theme.colors.secondary}>
+            Description:
+          </Text>
+          <Box marginLeft={2}>
+            <Text color={theme.colors.textDim}>{product.description}</Text>
+          </Box>
+        </Box>
+      )}
+
       {/* Variants */}
       {product.variants.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
@@ -83,22 +90,23 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
             <Box key={variant.id} marginLeft={2}>
               <Text color={theme.colors.textDim}>{theme.symbols.bullet} </Text>
               <Text>{variant.title}: </Text>
-              <Text color={theme.colors.accent}>${variant.price}</Text>
+              <Text color={theme.colors.accent}>
+                ${variant.price.toFixed(2)}
+              </Text>
               <Text dimColor> (Stock: {variant.inventoryQuantity})</Text>
+              {variant.available ? (
+                <Text color={theme.colors.available}>
+                  {' '}
+                  {theme.symbols.check}
+                </Text>
+              ) : (
+                <Text color={theme.colors.unavailable}>
+                  {' '}
+                  {theme.symbols.cross}
+                </Text>
+              )}
             </Box>
           ))}
-        </Box>
-      )}
-
-      {/* Tags */}
-      {product.tags.length > 0 && (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text bold color={theme.colors.secondary}>
-            Tags:
-          </Text>
-          <Box marginLeft={2}>
-            <Text color={theme.colors.textDim}>{product.tags.join(', ')}</Text>
-          </Box>
         </Box>
       )}
 
@@ -108,7 +116,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
           <Text bold color={theme.colors.secondary}>
             Images ({product.images.length}):
           </Text>
-          {product.images.slice(0, 3).map((image, index) => (
+          {product.images.slice(0, 3).map((image) => (
             <Box key={image.id} marginLeft={2}>
               <Text color={theme.colors.textDim}>{theme.symbols.bullet} </Text>
               <Text color={theme.colors.info}>{image.src}</Text>
@@ -121,28 +129,6 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
           )}
         </Box>
       )}
-
-      {/* Timestamps */}
-      <Box
-        flexDirection="column"
-        marginTop={1}
-        borderColor={theme.colors.border}
-        borderStyle="single"
-        paddingX={1}
-      >
-        <Box>
-          <Text dimColor>Created: </Text>
-          <Text>{formatDate(product.createdAt)}</Text>
-        </Box>
-        <Box>
-          <Text dimColor>Updated: </Text>
-          <Text>{formatDate(product.updatedAt)}</Text>
-        </Box>
-        <Box>
-          <Text dimColor>Published: </Text>
-          <Text>{formatDate(product.publishedAt)}</Text>
-        </Box>
-      </Box>
 
       {/* ID */}
       <Box marginTop={1}>

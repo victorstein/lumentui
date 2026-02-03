@@ -55,10 +55,10 @@ export const ProductList: React.FC<ProductListProps> = ({
   }
 
   // Format price
-  const formatPrice = (variants: Product['variants']) => {
-    if (variants.length === 0) return 'N/A';
+  const formatPrice = (product: Product) => {
+    if (product.variants.length === 0) return `$${product.price.toFixed(2)}`;
 
-    const prices = variants.map((v) => parseFloat(v.price));
+    const prices = product.variants.map((v) => v.price);
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
 
@@ -119,15 +119,13 @@ export const ProductList: React.FC<ProductListProps> = ({
         paddingY={1}
         flexGrow={1}
         overflow="hidden"
+        gap={1}
       >
         {products.map((product, index) => {
           const isSelected = index === selectedIndex;
 
           return (
-            <Box
-              key={product.id}
-              marginBottom={index < products.length - 1 ? 1 : 0}
-            >
+            <Box key={product.id}>
               <Box width="100%" paddingX={1}>
                 {isSelected && (
                   <Text color={theme.colors.accent} bold>
@@ -141,6 +139,7 @@ export const ProductList: React.FC<ProductListProps> = ({
                       isSelected ? theme.colors.text : theme.colors.textDim
                     }
                     bold={isSelected}
+                    wrap="truncate"
                   >
                     {product.title}
                   </Text>
@@ -153,7 +152,7 @@ export const ProductList: React.FC<ProductListProps> = ({
                     }
                     bold={isSelected}
                   >
-                    {formatPrice(product.variants)}
+                    {formatPrice(product)}
                   </Text>
                 </Box>
 

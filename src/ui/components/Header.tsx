@@ -41,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({ connected, lastHeartbeat }) => {
   return (
     <Box flexDirection="column" marginBottom={1}>
       {/* Logo */}
-      <Logo />
+      <Logo compact />
 
       {/* Status bar */}
       <Box

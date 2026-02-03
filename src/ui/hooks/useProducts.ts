@@ -42,9 +42,7 @@ export const useProducts = (products: Product[]) => {
       result = result.filter(
         (p) =>
           p.title.toLowerCase().includes(query) ||
-          p.vendor.toLowerCase().includes(query) ||
-          p.productType.toLowerCase().includes(query) ||
-          p.tags.some((tag) => tag.toLowerCase().includes(query)),
+          p.handle.toLowerCase().includes(query),
       );
     }
 

@@ -38,15 +38,13 @@ export const NotificationBanner: React.FC<NotificationBannerProps> = ({
       </Box>
 
       <Box>
-        <Text color={theme.colors.textDim}>
-          {product.vendor} • {product.productType}
-        </Text>
+        <Text color={theme.colors.textDim}>{product.handle}</Text>
       </Box>
 
-      {product.variants.length > 0 && (
+      {product.price > 0 && (
         <Box marginTop={1}>
           <Text color={theme.colors.accent}>
-            Price: ${product.variants[0].price}
+            Price: ${product.price.toFixed(2)}
           </Text>
           <Text> • </Text>
           <Text

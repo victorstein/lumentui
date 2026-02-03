@@ -47,8 +47,18 @@ const App: React.FC = () => {
 
   // Keyboard input handling
   useInput((input, key) => {
+    // Escape: back to list from detail, or quit from list
+    if (key.escape) {
+      if (viewMode === 'detail') {
+        switchView('list');
+      } else {
+        exit();
+      }
+      return;
+    }
+
     // Quit application
-    if (input === 'q' || key.escape) {
+    if (input === 'q') {
       exit();
       return;
     }
@@ -78,11 +88,6 @@ const App: React.FC = () => {
     if (input === 'c' && error) {
       clearError();
     }
-
-    // Back to list from detail
-    if (key.escape && viewMode === 'detail') {
-      switchView('list');
-    }
   });
 
   return (
@@ -111,57 +116,92 @@ const App: React.FC = () => {
         </Box>
       )}
 
-      {/* Connection warning */}
-      {!connected && !error && (
+      {/* Disconnected — show reconnecting screen instead of dashboard */}
+      {!connected && (
         <Box
-          borderStyle="single"
-          borderColor={theme.colors.warning}
-          paddingX={1}
-          marginBottom={1}
+          flexDirection="column"
+          flexGrow={1}
+          alignItems="center"
+          justifyContent="center"
         >
-          <Text color={theme.colors.warning}>
-            {theme.symbols.warning} Waiting for daemon connection...
-          </Text>
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor={theme.colors.warning}
+            paddingX={3}
+            paddingY={1}
+          >
+            <Text color={theme.colors.warning} bold>
+              {theme.symbols.warning} Daemon not connected
+            </Text>
+            <Box marginTop={1}>
+              <Text dimColor>Attempting to reconnect...</Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>
+                If the daemon was stopped, run{' '}
+                <Text color={theme.colors.accent} bold>
+                  lumentui start
+                </Text>
+              </Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>
+                Press{' '}
+                <Text color={theme.colors.accent} bold>
+                  q
+                </Text>{' '}
+                to quit
+              </Text>
+            </Box>
+          </Box>
         </Box>
       )}
 
-      {/* Main content area — stacks vertically on narrow terminals */}
-      <Box flexDirection={terminalWidth >= 100 ? 'row' : 'column'} flexGrow={1}>
-        {/* Product list or detail */}
-        <Box flexGrow={1} marginRight={terminalWidth >= 100 ? 1 : 0}>
-          {viewMode === 'list' ? (
-            <ProductList
-              products={filteredProducts}
-              selectedIndex={selectedIndex}
-              totalProducts={stats.total}
-              availableProducts={stats.available}
-            />
-          ) : (
-            <ProductDetail product={selectedProduct} />
-          )}
-        </Box>
-
-        {/* Log panel — side column on wide, bottom section on narrow, hidden on tiny */}
-        {terminalWidth >= 60 && (
+      {connected && (
+        <>
+          {/* Main content area */}
           <Box
-            width={terminalWidth >= 100 ? '40%' : '100%'}
-            height={terminalWidth >= 100 ? undefined : 8}
-            flexDirection="column"
-            flexShrink={0}
+            flexDirection={terminalWidth >= 100 ? 'row' : 'column'}
+            flexGrow={1}
           >
-            <LogPanel logs={logs} />
-          </Box>
-        )}
-      </Box>
+            {/* Product list or detail */}
+            <Box flexGrow={1} marginRight={terminalWidth >= 100 ? 1 : 0}>
+              {viewMode === 'list' || !selectedProduct ? (
+                <ProductList
+                  products={filteredProducts}
+                  selectedIndex={selectedIndex}
+                  totalProducts={stats.total}
+                  availableProducts={stats.available}
+                />
+              ) : (
+                <ProductDetail product={selectedProduct} />
+              )}
+            </Box>
 
-      {/* Bottom status bar */}
-      <StatusBar
-        lastHeartbeat={lastHeartbeat}
-        productCount={stats.total}
-        availableCount={stats.available}
-        viewMode={viewMode}
-        polling={polling}
-      />
+            {/* Log panel — side column on wide, bottom section on narrow, hidden on tiny */}
+            {terminalWidth >= 60 && (
+              <Box
+                width={terminalWidth >= 100 ? '40%' : '100%'}
+                height={terminalWidth >= 100 ? undefined : 8}
+                flexDirection="column"
+                flexShrink={0}
+              >
+                <LogPanel logs={logs} />
+              </Box>
+            )}
+          </Box>
+
+          {/* Bottom status bar */}
+          <StatusBar
+            lastHeartbeat={lastHeartbeat}
+            productCount={stats.total}
+            availableCount={stats.available}
+            viewMode={viewMode}
+            polling={polling}
+          />
+        </>
+      )}
     </Box>
   );
 };

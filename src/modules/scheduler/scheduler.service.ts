@@ -106,6 +106,7 @@ export class SchedulerService implements OnModuleInit {
       );
 
       // Fetch products from Shopify
+      this.ipcGateway.emitLog('info', 'Fetching products from Shopify...');
       const shopifyProducts = await this.shopifyService.getProducts();
 
       if (shopifyProducts.length === 0) {
@@ -149,6 +150,7 @@ export class SchedulerService implements OnModuleInit {
 
       // Emit individual new product events
       for (const newProduct of newProductList) {
+        this.ipcGateway.emitLog('info', `New product: ${newProduct.title}`);
         this.ipcGateway.emitProductNew(newProduct);
       }
 
@@ -194,6 +196,11 @@ export class SchedulerService implements OnModuleInit {
 
       this.databaseService.recordPoll(pollMetrics);
 
+      this.ipcGateway.emitLog(
+        'info',
+        `Poll complete: ${savedCount} products, ${newProducts} new (${durationMs}ms)`,
+      );
+
       this.logger.log(
         `Poll completed: ${savedCount} products, ${newProducts} new, ${durationMs}ms`,
         'SchedulerService',
@@ -217,6 +224,7 @@ export class SchedulerService implements OnModuleInit {
       );
 
       // Emit error to IPC clients
+      this.ipcGateway.emitLog('error', `Poll failed: ${errorMessage}`);
       this.ipcGateway.emitError(errorMessage);
 
       // Record failed poll

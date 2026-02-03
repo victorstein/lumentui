@@ -114,16 +114,13 @@ describe('useDaemon', () => {
     const { result } = renderHook(() => useDaemon());
     const mockProducts = [
       {
-        id: 1,
+        id: '1',
         title: 'Test Product',
         handle: 'test-product',
-        vendor: 'Test Vendor',
-        productType: 'Test Type',
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01',
-        publishedAt: '2024-01-01',
+        price: 10,
         available: true,
-        tags: ['test'],
+        description: null,
+        url: 'https://shop.lumenalta.com/products/test-product',
         variants: [],
         images: [],
       },
@@ -143,16 +140,13 @@ describe('useDaemon', () => {
   it('should show notification on product:new event', () => {
     const { result } = renderHook(() => useDaemon());
     const mockProduct = {
-      id: 1,
+      id: '2',
       title: 'New Product',
       handle: 'new-product',
-      vendor: 'Test Vendor',
-      productType: 'Test Type',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01',
-      publishedAt: '2024-01-01',
+      price: 20,
       available: true,
-      tags: ['new'],
+      description: null,
+      url: 'https://shop.lumenalta.com/products/new-product',
       variants: [],
       images: [],
     };
@@ -172,16 +166,13 @@ describe('useDaemon', () => {
 
     const { result } = renderHook(() => useDaemon());
     const mockProduct = {
-      id: 1,
+      id: '2',
       title: 'New Product',
       handle: 'new-product',
-      vendor: 'Test Vendor',
-      productType: 'Test Type',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01',
-      publishedAt: '2024-01-01',
+      price: 20,
       available: true,
-      tags: ['new'],
+      description: null,
+      url: 'https://shop.lumenalta.com/products/new-product',
       variants: [],
       images: [],
     };
@@ -294,16 +285,13 @@ describe('useDaemon', () => {
   it('should clear notification when clearNotification is called', () => {
     const { result } = renderHook(() => useDaemon());
     const mockProduct = {
-      id: 1,
+      id: '2',
       title: 'New Product',
       handle: 'new-product',
-      vendor: 'Test Vendor',
-      productType: 'Test Type',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01',
-      publishedAt: '2024-01-01',
+      price: 20,
       available: true,
-      tags: ['new'],
+      description: null,
+      url: 'https://shop.lumenalta.com/products/new-product',
       variants: [],
       images: [],
     };

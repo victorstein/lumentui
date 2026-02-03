@@ -7,30 +7,30 @@ import * as ipcModule from 'node-ipc';
 const ipc = (ipcModule as any).default || ipcModule;
 
 /**
- * Product data structure from daemon
+ * Product data structure from daemon (matches ProductDto)
  */
 export interface Product {
-  id: number;
+  id: string;
   title: string;
   handle: string;
-  vendor: string;
-  productType: string;
-  createdAt: string;
-  updatedAt: string;
-  publishedAt: string;
+  price: number;
   available: boolean;
-  tags: string[];
+  description: string | null;
+  url: string;
   variants: Array<{
-    id: number;
+    id: string;
     title: string;
-    price: string;
+    price: number;
+    sku: string | null;
     available: boolean;
     inventoryQuantity: number;
   }>;
   images: Array<{
-    id: number;
+    id: string;
     src: string;
-    alt: string;
+    alt: string | null;
+    width: number;
+    height: number;
   }>;
 }
 
@@ -78,6 +78,7 @@ export const useDaemon = () => {
     ipc.config.id = 'lumentui-tui';
     ipc.config.retry = 1500;
     ipc.config.silent = true;
+    ipc.config.stopRetrying = false;
 
     // Connect to daemon
     ipc.connectTo('lumentui-daemon', socketPath, () => {
@@ -101,6 +102,7 @@ export const useDaemon = () => {
         setState((prev) => ({
           ...prev,
           connected: false,
+          polling: false,
         }));
       });
 
@@ -163,12 +165,16 @@ export const useDaemon = () => {
         }));
       });
 
-      // Error handler
+      // Error handler — suppress connection errors (shown via Disconnected status)
       client.on('error', (error: Error) => {
+        const isConnectionError =
+          error.message?.includes('ECONNREFUSED') ||
+          error.message?.includes('ENOENT');
         setState((prev) => ({
           ...prev,
           connected: false,
-          error: error.message,
+          error: isConnectionError ? null : error.message,
+          polling: isConnectionError ? false : prev.polling,
         }));
       });
     });

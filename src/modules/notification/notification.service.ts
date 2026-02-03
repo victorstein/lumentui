@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as notifier from 'node-notifier';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import notifierModule = require('node-notifier');
 import { LoggerService } from '../../common/logger/logger.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { ProductDto } from '../api/dto/product.dto';
@@ -54,7 +55,7 @@ export class NotificationService implements OnModuleInit {
 
       // Send native macOS notification
       await new Promise<void>((resolve, reject) => {
-        notifier.notify(
+        notifierModule.notify(
           {
             title: 'LumenTUI - New Product Available',
             message: message,
