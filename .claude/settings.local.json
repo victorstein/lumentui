@@ -29,7 +29,24 @@
       "Bash(/Users/alfonsogomez/Documents/development/personal/lumentui/node_modules/node-notifier/vendor/mac.noindex/terminal-notifier.app/Contents/MacOS/terminal-notifier:*)",
       "Bash(brew list:*)",
       "Bash(npm run lint:*)",
-      "Bash(npm run format:*)"
+      "Bash(npm run format:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "Bash(npm test:*)",
+      "Bash(pnpm run lint:*)",
+      "Bash(pnpm run format:*)",
+      "Bash(bd sync:*)",
+      "Bash(lsof:*)",
+      "Bash(test:*)",
+      "Bash(gtimeout 5 node:*)",
+      "Bash(ps:*)",
+      "Bash(kill:*)",
+      "mcp__plugin_github_github__create_repository",
+      "mcp__plugin_github_github__create_or_update_file",
+      "Bash(pnpm build:*)",
+      "Bash(npm publish:*)",
+      "Bash(shasum:*)"
     ]
   }
 }

@@ -297,7 +297,7 @@ program
           spawnDaemon: (daemonPath: string) => {
             const daemon = spawn('node', [daemonPath], {
               detached: true,
-              stdio: options.daemonOnly ? 'ignore' : 'pipe',
+              stdio: 'ignore',
               env: process.env,
             });
             daemon.unref();

@@ -78,11 +78,26 @@ AppModule
 
 ## 🚀 Installation
 
-### 1. Clone & Install Dependencies
+### Homebrew (Recommended)
 
 ```bash
-cd ~/clawd/development/lumentui/lumentui
+brew tap victorstein/lumentui
+brew install lumentui
+```
+
+### npm
+
+```bash
+npm install -g lumentui
+```
+
+### From Source
+
+```bash
+git clone https://github.com/victorstein/lumentui.git
+cd lumentui
 npm install
+npm run build
 ```
 
 ### 2. Configure Environment

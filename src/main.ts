@@ -33,6 +33,9 @@ async function bootstrap() {
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGHUP', () => {
+    logger.log('Received SIGHUP (terminal closed), ignoring...', 'Bootstrap');
+  });
 
   // Keep process alive
   logger.log('Daemon is running. Press Ctrl+C to stop.', 'Bootstrap');
