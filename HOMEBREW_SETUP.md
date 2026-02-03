@@ -1,7 +1,7 @@
 # 🍺 Homebrew Distribution Guide for LumentuiAPI
 
 **Actualizado:** 2026-02-02  
-**Versión:** 1.0.0  
+**Versión:** 1.1.0  
 **Estado:** ✅ LISTO (requires npm publish)
 
 ---
@@ -10,10 +10,10 @@
 
 ### ✅ Ya Tienes (Estado Actual)
 
-- [x] **Git Repository**: https://github.com/steinhakase/lumentui.git
+- [x] **Git Repository**: https://github.com/victorstein/lumentui.git
 - [x] **package.json configurado**:
   - `name: "lumentui"`
-  - `version: "1.0.0"`
+  - `version: "1.1.0"`
   - `bin: {"lumentui": "./dist/cli.js"}`
   - `repository` configurado
 - [x] **CLI compilado**: `dist/cli.js` con shebang `#!/usr/bin/env node`
@@ -45,7 +45,7 @@
 **Proceso:**
 
 1. Publicar a npm con `npm publish`
-2. Crear GitHub release con tag `v1.0.0`
+2. Crear GitHub release con tag `v1.1.0`
 3. Crear PR a [homebrew-core](https://github.com/Homebrew/homebrew-core)
 4. Esperar review (puede ser rechazado)
 
@@ -60,7 +60,7 @@
 - Control total
 - Deploy inmediato
 - No requiere review externo
-- Instalable con `brew install steinhakase/tap/lumentui`
+- Instalable con `brew install victorstein/lumentui/lumentui`
 
 **Cons:**
 
@@ -100,31 +100,31 @@ npm publish --access public
 cd ~/clawd/development/lumentui
 
 # 1. Tag la versión
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
+git tag -a v1.1.0 -m "Release v1.1.0"
+git push origin v1.1.0
 
 # 2. Crea release en GitHub UI o con gh CLI:
-gh release create v1.0.0 \
-  --title "LumentuiAPI v1.0.0" \
+gh release create v1.1.0 \
+  --title "LumentuiAPI v1.1.0" \
   --notes "Initial release" \
   --latest
 ```
 
-**Resultado:** https://github.com/steinhakase/lumentui/releases/tag/v1.0.0
+**Resultado:** https://github.com/victorstein/lumentui/releases/tag/v1.1.0
 
 ---
 
 ### Paso 3: Crear Homebrew Tap Repository
 
 ```bash
-# 1. Crea nuevo repo en GitHub: "homebrew-tap"
-gh repo create steinhakase/homebrew-tap --public
+# 1. Crea nuevo repo en GitHub: "homebrew-lumentui"
+gh repo create victorstein/homebrew-lumentui --public
 
 # 2. Clónalo
 mkdir -p ~/brew-tap
 cd ~/brew-tap
-git clone https://github.com/steinhakase/homebrew-tap.git
-cd homebrew-tap
+git clone https://github.com/victorstein/homebrew-lumentui.git
+cd homebrew-lumentui
 
 # 3. Crea la formula
 mkdir -p Formula
@@ -139,8 +139,8 @@ Crea `Formula/lumentui.rb`:
 ```ruby
 class Lumentui < Formula
   desc "Elegant product monitoring for shop.lumenalta.com with macOS notifications"
-  homepage "https://github.com/steinhakase/lumentui"
-  url "https://registry.npmjs.org/lumentui/-/lumentui-1.0.0.tgz"
+  homepage "https://github.com/victorstein/lumentui"
+  url "https://registry.npmjs.org/lumentui/-/lumentui-1.1.0.tgz"
   sha256 "REPLACE_WITH_ACTUAL_SHA256"
   license "MIT"
 
@@ -161,11 +161,11 @@ end
 
 ```bash
 # Opción A: Desde npm
-curl -L https://registry.npmjs.org/lumentui/-/lumentui-1.0.0.tgz | shasum -a 256
+curl -L https://registry.npmjs.org/lumentui/-/lumentui-1.1.0.tgz | shasum -a 256
 
 # Opción B: Desde local tarball
 npm pack
-shasum -a 256 lumentui-1.0.0.tgz
+shasum -a 256 lumentui-1.1.0.tgz
 ```
 
 ---
@@ -173,14 +173,14 @@ shasum -a 256 lumentui-1.0.0.tgz
 ### Paso 5: Push Formula
 
 ```bash
-cd ~/brew-tap/homebrew-tap
+cd ~/brew-tap/homebrew-lumentui
 
 git add Formula/lumentui.rb
-git commit -m "Add lumentui formula v1.0.0"
+git commit -m "Add lumentui formula v1.1.0"
 git push origin main
 ```
 
-**Resultado:** https://github.com/steinhakase/homebrew-tap
+**Resultado:** https://github.com/victorstein/homebrew-lumentui
 
 ---
 
@@ -188,10 +188,10 @@ git push origin main
 
 ```bash
 # 1. Agregar tap
-brew tap steinhakase/tap
+brew tap victorstein/lumentui
 
 # 2. Instalar
-brew install steinhakase/tap/lumentui
+brew install victorstein/lumentui/lumentui
 
 # 3. Verificar
 lumentui --version
@@ -212,7 +212,7 @@ npm publish
 git push --tags
 
 # 2. Actualiza formula
-cd ~/brew-tap/homebrew-tap
+cd ~/brew-tap/homebrew-lumentui
 vim Formula/lumentui.rb
 
 # Cambiar:
@@ -237,7 +237,7 @@ Si NO quieres publicar a npm público, puedes usar GitHub releases como fuente:
 class Lumentui < Formula
   desc "..."
   homepage "..."
-  url "https://github.com/steinhakase/lumentui/archive/refs/tags/v1.0.0.tar.gz"
+  url "https://github.com/victorstein/lumentui/archive/refs/tags/v1.1.0.tar.gz"
   sha256 "..."
   license "MIT"
 
@@ -280,7 +280,7 @@ end
 
 1. Publicas a npm (gratuito, infinitas descargas)
 2. Creas tap en 10 minutos
-3. Instalación simple: `brew install steinhakase/tap/lumentui`
+3. Instalación simple: `brew install victorstein/lumentui/lumentui`
 
 **Pasos mínimos:**
 
@@ -290,24 +290,24 @@ cd ~/clawd/development/lumentui
 npm publish
 
 # 2. Create tap repo
-gh repo create steinhakase/homebrew-tap --public
-git clone https://github.com/steinhakase/homebrew-tap.git ~/brew-tap/homebrew-tap
+gh repo create victorstein/homebrew-lumentui --public
+git clone https://github.com/victorstein/homebrew-lumentui.git ~/brew-tap/homebrew-lumentui
 
 # 3. Create formula (copy template above)
-cd ~/brew-tap/homebrew-tap
+cd ~/brew-tap/homebrew-lumentui
 mkdir -p Formula
 # [Crear Formula/lumentui.rb con contenido de arriba]
 
 # 4. Get SHA256
-curl -L https://registry.npmjs.org/lumentui/-/lumentui-1.0.0.tgz | shasum -a 256
+curl -L https://registry.npmjs.org/lumentui/-/lumentui-1.1.0.tgz | shasum -a 256
 
 # 5. Update SHA in formula y push
 git add Formula/lumentui.rb
-git commit -m "Add lumentui formula v1.0.0"
+git commit -m "Add lumentui formula v1.1.0"
 git push
 
 # 6. Test
-brew tap steinhakase/tap
+brew tap victorstein/lumentui
 brew install lumentui
 ```
 
@@ -342,7 +342,7 @@ def caveats
     3. Start monitoring:
        $ lumentui start
 
-    For more info: https://github.com/steinhakase/lumentui
+    For more info: https://github.com/victorstein/lumentui
   EOS
 end
 ```
@@ -352,7 +352,7 @@ end
 Homebrew CLI puede generar formula base:
 
 ```bash
-brew create https://registry.npmjs.org/lumentui/-/lumentui-1.0.0.tgz
+brew create https://registry.npmjs.org/lumentui/-/lumentui-1.1.0.tgz
 ```
 
 ---

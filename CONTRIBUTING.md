@@ -55,7 +55,7 @@ cd lumentui
 3. Add upstream remote:
 
 ```bash
-git remote add upstream https://github.com/steinhakase/lumentui.git
+git remote add upstream https://github.com/victorstein/lumentui.git
 ```
 
 4. Create a feature branch:

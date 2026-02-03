@@ -551,7 +551,7 @@ Never share this file or commit it to version control.
 
 **Stein Hakase**  
 Email: stein.hakase.vs@gmail.com  
-GitHub: [@steinhakase](https://github.com/steinhakase)
+GitHub: [@victorstein](https://github.com/victorstein)
 
 ---
 
