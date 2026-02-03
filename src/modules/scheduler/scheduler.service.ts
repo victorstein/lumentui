@@ -73,9 +73,9 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     );
 
     // Create dynamic interval for automatic polling
-    this.pollIntervalHandle = setInterval(async () => {
+    this.pollIntervalHandle = setInterval(() => {
       this.logger.log('Automatic poll triggered', 'SchedulerService');
-      await this.handlePoll();
+      void this.handlePoll();
     }, pollIntervalMs);
 
     // Register with SchedulerRegistry for management

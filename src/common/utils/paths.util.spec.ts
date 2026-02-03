@@ -4,7 +4,6 @@ import * as os from 'os';
 
 describe('PathsUtil', () => {
   const originalEnv = process.env;
-  const originalPlatform = process.platform;
 
   beforeEach(() => {
     // Reset environment before each test
@@ -14,7 +13,6 @@ describe('PathsUtil', () => {
   afterEach(() => {
     // Restore original environment
     process.env = originalEnv;
-    // Note: Cannot reset process.platform as it's read-only
   });
 
   describe('getDataDir', () => {
