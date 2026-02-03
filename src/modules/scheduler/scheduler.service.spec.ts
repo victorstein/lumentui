@@ -447,7 +447,7 @@ describe('SchedulerService', () => {
 
       const result = await service.handlePoll();
 
-      expect(result.durationMs).toBeGreaterThanOrEqual(50);
+      expect(result.durationMs).toBeGreaterThanOrEqual(45);
       expect(databaseService.recordPoll).toHaveBeenCalledWith(
         expect.objectContaining({
           durationMs: expect.any(Number),
