@@ -113,9 +113,13 @@ export class NotificationService implements OnModuleInit {
     const escaped = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const script = `display notification "${escaped}" with title "LumenTUI" subtitle "New Product Available" sound name "default"`;
     return new Promise<void>((resolve, reject) => {
-      execFile('osascript', ['-e', script], (error) =>
-        error ? reject(error) : resolve(),
-      );
+      execFile('osascript', ['-e', script], (error: Error | null) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
     });
   }
 
