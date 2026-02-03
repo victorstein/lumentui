@@ -185,6 +185,7 @@ const App: React.FC = () => {
                 width={terminalWidth >= 100 ? '40%' : '100%'}
                 height={terminalWidth >= 100 ? undefined : 8}
                 flexDirection="column"
+                flexGrow={terminalWidth >= 100 ? 1 : 0}
                 flexShrink={0}
               >
                 <LogPanel logs={logs} />
