@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, Static } from 'ink';
 import { theme } from '../theme.js';
 import { LogEntry } from '../hooks/useDaemon.js';
 
@@ -8,10 +8,9 @@ interface LogPanelProps {
 }
 
 /**
- * Log panel component showing daemon logs
+ * Log panel component showing daemon logs with Static for performance
  */
 export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
-  // Get color based on log level
   const getLogColor = (level: string) => {
     switch (level.toLowerCase()) {
       case 'error':
@@ -28,7 +27,6 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
     }
   };
 
-  // Get symbol based on log level
   const getLogSymbol = (level: string) => {
     switch (level.toLowerCase()) {
       case 'error':
@@ -45,7 +43,6 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
     }
   };
 
-  // Format timestamp
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString();
   };
@@ -53,39 +50,34 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
   return (
     <Box
       flexDirection="column"
-      borderStyle="single"
+      borderStyle="round"
       borderColor={theme.colors.border}
       flexGrow={1}
     >
       {/* Header */}
-      <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1}>
+      <Box paddingX={1}>
         <Text bold color={theme.colors.primary}>
           {theme.symbols.info} Daemon Logs
         </Text>
       </Box>
+      <Box paddingX={1}>
+        <Text color={theme.colors.border}>{'─'.repeat(40)}</Text>
+      </Box>
 
       {/* Logs */}
-      <Box
-        flexDirection="column"
-        paddingX={1}
-        paddingY={1}
-        flexGrow={1}
-        overflow="hidden"
-      >
+      <Box flexDirection="column" paddingX={1} flexGrow={1} overflow="hidden">
         {logs.length === 0 ? (
           <Text color={theme.colors.textMuted}>No logs yet...</Text>
         ) : (
           logs.map((log, index) => (
-            <Box key={index}>
-              <Text color={theme.colors.textDim}>
-                [{formatTime(log.timestamp)}]
+            <Box key={index} flexShrink={0}>
+              <Text color={theme.colors.textMuted}>
+                {formatTime(log.timestamp)}{' '}
               </Text>
-              <Text> </Text>
               <Text color={getLogColor(log.level)}>
-                {getLogSymbol(log.level)} {log.level.toUpperCase()}:
+                {getLogSymbol(log.level)}{' '}
               </Text>
-              <Text> </Text>
-              <Text>{log.message}</Text>
+              <Text wrap="truncate">{log.message}</Text>
             </Box>
           ))
         )}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import Gradient from 'ink-gradient';
 import { theme } from '../theme.js';
 
 interface LogoProps {
@@ -7,24 +8,24 @@ interface LogoProps {
 }
 
 /**
- * Reusable Logo component
+ * Reusable Logo component with gradient styling
  */
 export const Logo: React.FC<LogoProps> = ({ compact = false }) => {
   if (compact) {
     return (
       <Box>
-        <Text color={theme.colors.primary} bold>
-          {theme.symbols.star} lumentui
-        </Text>
+        <Gradient colors={['#00d4ff', '#8338ec', '#ff006e']}>
+          <Text bold>{theme.symbols.star} lumentui</Text>
+        </Gradient>
       </Box>
     );
   }
 
   return (
     <Box>
-      <Text color={theme.colors.primary} bold>
-        {theme.logo}
-      </Text>
+      <Gradient colors={['#00d4ff', '#8338ec', '#ff006e']}>
+        <Text bold>{theme.logo}</Text>
+      </Gradient>
     </Box>
   );
 };

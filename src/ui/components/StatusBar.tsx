@@ -21,15 +21,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   viewMode,
   polling,
 }) => {
-  // Calculate next poll time (every minute)
   const getNextPollTime = () => {
     if (!lastHeartbeat) return 'N/A';
 
-    const nextPoll = lastHeartbeat + 60000; // 1 minute from last poll
+    const nextPoll = lastHeartbeat + 60000;
     const timeUntil = nextPoll - Date.now();
 
     if (timeUntil <= 0) {
-      return 'polling now...';
+      return 'now';
     }
 
     const seconds = Math.ceil(timeUntil / 1000);
@@ -39,90 +38,58 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   return (
     <Box flexDirection="column">
       {/* Stats bar */}
-      <Box
-        borderStyle="single"
-        borderColor={theme.colors.border}
-        paddingX={1}
-        justifyContent="space-between"
-      >
-        <Box>
-          <Text color={theme.colors.primary}>{theme.symbols.star} </Text>
-          <Text dimColor>Products: </Text>
-          <Text color={theme.colors.text}>{productCount}</Text>
-          <Text dimColor> | Available: </Text>
-          <Text color={theme.colors.available}>{availableCount}</Text>
+      <Box paddingX={1} justifyContent="space-between">
+        <Box gap={1}>
+          <Text color={theme.colors.textDim}>Products:</Text>
+          <Text color={theme.colors.text} bold>
+            {productCount}
+          </Text>
+          <Text color={theme.colors.textDim}>│</Text>
+          <Text color={theme.colors.textDim}>Available:</Text>
+          <Text color={theme.colors.available} bold>
+            {availableCount}
+          </Text>
         </Box>
 
-        <Box>
+        <Box gap={1}>
           {polling ? (
             <>
               <Text color={theme.colors.warning}>
                 <Spinner type="dots" />
               </Text>
-              <Text color={theme.colors.warning}> Polling…</Text>
+              <Text color={theme.colors.warning}>Polling…</Text>
             </>
           ) : (
             <>
-              <Text dimColor>Next poll in: </Text>
+              <Text color={theme.colors.textDim}>Next poll:</Text>
               <Text color={theme.colors.info}>{getNextPollTime()}</Text>
             </>
           )}
-        </Box>
-
-        <Box>
-          <Text dimColor>View: </Text>
-          <Text color={theme.colors.accent}>
+          <Text color={theme.colors.textDim}>│</Text>
+          <Text color={theme.colors.textDim}>View:</Text>
+          <Text color={theme.colors.accent} bold>
             {viewMode === 'list' ? 'List' : 'Detail'}
           </Text>
         </Box>
       </Box>
 
       {/* Hotkeys bar */}
-      <Box
-        borderStyle="single"
-        borderColor={theme.colors.border}
-        paddingX={1}
-        justifyContent="space-between"
-      >
-        <Box>
-          <Text color={theme.colors.textDim}>
-            <Text color={theme.colors.accent} bold>
-              ↑/k
-            </Text>{' '}
-            up{' '}
-            <Text color={theme.colors.accent} bold>
-              ↓/j
-            </Text>{' '}
-            down
-          </Text>
-        </Box>
-
-        <Box>
-          <Text color={theme.colors.textDim}>
-            <Text color={theme.colors.accent} bold>
-              enter/space
-            </Text>{' '}
-            toggle view
-          </Text>
-        </Box>
-
-        <Box>
-          <Text color={theme.colors.textDim}>
-            <Text color={theme.colors.accent} bold>
-              f
-            </Text>{' '}
-            force poll
-          </Text>
-        </Box>
-
-        <Box>
-          <Text color={theme.colors.textDim}>
-            <Text color={theme.colors.accent} bold>
-              q/esc
-            </Text>{' '}
-            quit
-          </Text>
-        </Box>
+      <Box paddingX={1} gap={2}>
+        <Text color={theme.colors.textMuted}>
+          <Text color={theme.colors.accent}>↑↓</Text> navigate
+        </Text>
+        <Text color={theme.colors.textMuted}>
+          <Text color={theme.colors.accent}>enter</Text> select
+        </Text>
+        <Text color={theme.colors.textMuted}>
+          <Text color={theme.colors.accent}>f</Text> poll
+        </Text>
+        <Text color={theme.colors.textMuted}>
+          <Text color={theme.colors.accent}>esc</Text> back
+        </Text>
+        <Text color={theme.colors.textMuted}>
+          <Text color={theme.colors.accent}>q</Text> quit
+        </Text>
       </Box>
     </Box>
   );
