@@ -141,7 +141,7 @@ export const useDaemon = () => {
               ...prev,
               newProductNotification: null,
             }));
-          }, 5000);
+          }, 20000);
         },
       );
 

@@ -161,7 +161,7 @@ describe('useDaemon', () => {
     expect(result.current.newProductNotification).toEqual(mockProduct);
   });
 
-  it('should clear notification after 5 seconds', () => {
+  it('should clear notification after 20 seconds', () => {
     jest.useFakeTimers();
 
     const { result } = renderHook(() => useDaemon());
@@ -186,9 +186,9 @@ describe('useDaemon', () => {
 
     expect(result.current.newProductNotification).toEqual(mockProduct);
 
-    // Fast-forward 5 seconds
+    // Fast-forward 20 seconds
     act(() => {
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(20000);
     });
 
     expect(result.current.newProductNotification).toBeNull();

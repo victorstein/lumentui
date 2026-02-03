@@ -5,12 +5,14 @@ import { NotificationService } from './notification.service';
 import { LoggerService } from '../../common/logger/logger.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { ProductDto } from '../api/dto/product.dto';
-import * as notifier from 'node-notifier';
+import * as childProcess from 'child_process';
 
-// Mock node-notifier
-jest.mock('node-notifier', () => ({
-  notify: jest.fn(),
+// Mock child_process.execFile
+jest.mock('child_process', () => ({
+  execFile: jest.fn(),
 }));
+
+const mockExecFile = childProcess.execFile as unknown as jest.Mock;
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -57,6 +59,24 @@ describe('NotificationService', () => {
     description: 'High-performance gaming mouse',
     url: 'https://shop.lumenalta.com/products/test-gaming-mouse',
   };
+
+  /** Helper: make mockExecFile call the callback with success */
+  function execFileSuccess() {
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], cb: Function) => {
+        cb(null, '', '');
+      },
+    );
+  }
+
+  /** Helper: make mockExecFile call the callback with an error */
+  function execFileError(msg = 'osascript failed') {
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], cb: Function) => {
+        cb(new Error(msg), '', '');
+      },
+    );
+  }
 
   beforeEach(async () => {
     // Reset mocks
@@ -123,8 +143,8 @@ describe('NotificationService', () => {
 
     it('should rebuild rate limit cache from database on initialization', async () => {
       const recentNotifications = [
-        { product_id: 'prod1', last_sent: Date.now() - 30 * 60 * 1000 }, // 30 min ago
-        { product_id: 'prod2', last_sent: Date.now() - 10 * 60 * 1000 }, // 10 min ago
+        { product_id: 'prod1', last_sent: Date.now() - 30 * 60 * 1000 },
+        { product_id: 'prod2', last_sent: Date.now() - 10 * 60 * 1000 },
       ];
 
       const mockGetRecentNotifications = jest
@@ -164,7 +184,6 @@ describe('NotificationService', () => {
         'NotificationService',
       );
 
-      // Verify cache is actually populated (products should be rate limited)
       const status1 = testService.getRateLimitStatus('prod1');
       const status2 = testService.getRateLimitStatus('prod2');
 
@@ -202,7 +221,6 @@ describe('NotificationService', () => {
 
       const testService = module.get<NotificationService>(NotificationService);
 
-      // Should not throw, just log error
       expect(() => testService.onModuleInit()).not.toThrow();
 
       expect(mockLoggerService.error).toHaveBeenCalledWith(
@@ -214,25 +232,21 @@ describe('NotificationService', () => {
 
   describe('sendAvailabilityNotification', () => {
     it('should send notification successfully', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
       const result = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result).toBe(true);
-      expect(notifier.notify).toHaveBeenCalledTimes(1);
-
-      const notifyCall = (notifier.notify as jest.Mock).mock.calls[0][0];
-      expect(notifyCall.title).toContain('LumenTUI - New Product Available');
-      expect(notifyCall.message).toContain('Test Gaming Mouse');
-      expect(notifyCall.sound).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'osascript',
+        ['-e', expect.stringContaining('Test Gaming Mouse')],
+        expect.any(Function),
+      );
     });
 
     it('should handle notification errors gracefully', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(new Error('Notification failed'), null);
-      });
+      execFileError();
 
       const result = await service.sendAvailabilityNotification(mockProduct);
 
@@ -240,83 +254,68 @@ describe('NotificationService', () => {
       expect(mockLoggerService.error).toHaveBeenCalled();
       expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
         mockProduct.id,
-        false, // sent = false
+        false,
       );
     });
 
     it('should record successful notification in database', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
       await service.sendAvailabilityNotification(mockProduct);
 
       expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
         mockProduct.id,
-        true, // sent = true
+        true,
       );
     });
   });
 
   describe('Message formatting', () => {
     it('should format message with all product details', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
       await service.sendAvailabilityNotification(mockProduct);
 
-      const notifyCall = (notifier.notify as jest.Mock).mock.calls[0][0];
+      const script = mockExecFile.mock.calls[0][1][1] as string;
 
-      // Check message contains key elements
-      expect(notifyCall.message).toContain(mockProduct.title);
-      expect(notifyCall.message).toContain('$59.99');
-      expect(notifyCall.message).toContain('variant');
-      expect(notifyCall.message).toContain(mockProduct.url);
+      expect(script).toContain(mockProduct.title);
+      expect(script).toContain('$59.99');
+      expect(script).toContain('variant');
+      expect(script).toContain(mockProduct.url);
     });
 
     it('should format concise message for notification center', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
       await service.sendAvailabilityNotification(mockProduct);
 
-      const notifyCall = (notifier.notify as jest.Mock).mock.calls[0][0];
+      const script = mockExecFile.mock.calls[0][1][1] as string;
 
-      // Should be concise, plain text notification
-      expect(notifyCall.message).not.toContain('*');
-      expect(notifyCall.message).not.toContain('🔔');
-      expect(notifyCall.message).not.toContain('_');
+      expect(script).not.toContain('*');
+      expect(script).not.toContain('🔔');
+      expect(script).not.toContain('_');
     });
   });
 
   describe('Rate limiting', () => {
     it('should allow first notification for a product', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
       const result = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result).toBe(true);
-      expect(notifier.notify).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
     });
 
     it('should block duplicate notifications within rate limit window', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
-      // First notification
       const result1 = await service.sendAvailabilityNotification(mockProduct);
-
-      // Immediate second notification - should be blocked
       const result2 = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result1).toBe(true);
       expect(result2).toBe(false);
-      expect(notifier.notify).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
       expect(mockLoggerService.warn).toHaveBeenCalledWith(
         expect.stringContaining('Rate limit hit'),
         'NotificationService',
@@ -324,9 +323,7 @@ describe('NotificationService', () => {
     });
 
     it('should allow notifications for different products', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
       const product2: ProductDto = { ...mockProduct, id: '999' };
 
@@ -335,23 +332,19 @@ describe('NotificationService', () => {
 
       expect(result1).toBe(true);
       expect(result2).toBe(true);
-      expect(notifier.notify).toHaveBeenCalledTimes(2);
+      // 1 `which` check (cached) + 2 terminal-notifier calls = 3
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
     });
 
     it('should provide rate limit status', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
-      // No notification yet
       let status = service.getRateLimitStatus(mockProduct.id);
       expect(status.isLimited).toBe(false);
       expect(status.lastNotification).toBeNull();
 
-      // Send notification
       await service.sendAvailabilityNotification(mockProduct);
 
-      // Check status after notification
       status = service.getRateLimitStatus(mockProduct.id);
       expect(status.isLimited).toBe(true);
       expect(status.lastNotification).toBeGreaterThan(0);
@@ -360,21 +353,16 @@ describe('NotificationService', () => {
     });
 
     it('should clear rate limit cache', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
-      // Send notification
       await service.sendAvailabilityNotification(mockProduct);
 
-      // Clear cache
       service.clearRateLimitCache();
 
-      // Should allow notification again
       const result = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result).toBe(true);
-      expect(notifier.notify).toHaveBeenCalledTimes(2);
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -621,9 +609,7 @@ describe('NotificationService', () => {
 
   describe('Edge cases', () => {
     it('should handle product with no variants', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
       const productNoVariants: ProductDto = {
         ...mockProduct,
@@ -634,14 +620,12 @@ describe('NotificationService', () => {
         await service.sendAvailabilityNotification(productNoVariants);
 
       expect(result).toBe(true);
-      const notifyCall = (notifier.notify as jest.Mock).mock.calls[0][0];
-      expect(notifyCall.message).not.toContain('variant');
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).not.toContain('variant');
     });
 
     it('should handle product with zero price', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
       const productFree: ProductDto = {
         ...mockProduct,
@@ -651,20 +635,15 @@ describe('NotificationService', () => {
       const result = await service.sendAvailabilityNotification(productFree);
 
       expect(result).toBe(true);
-      const notifyCall = (notifier.notify as jest.Mock).mock.calls[0][0];
-      expect(notifyCall.message).not.toContain('Price:');
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).not.toContain('Price:');
     });
 
     it('should handle database recording errors without failing notification', async () => {
-      (notifier.notify as jest.Mock).mockImplementation((options, callback) => {
-        callback(null, 'response');
-      });
+      execFileSuccess();
 
-      // The recordNotification method in DatabaseService handles errors internally
-      // and logs them, so the notification service doesn't need to catch them
       const result = await service.sendAvailabilityNotification(mockProduct);
 
-      // Notification should still succeed
       expect(result).toBe(true);
       expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
         mockProduct.id,

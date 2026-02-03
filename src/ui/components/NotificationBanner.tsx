@@ -60,7 +60,7 @@ export const NotificationBanner: React.FC<NotificationBannerProps> = ({
       )}
 
       <Box marginTop={1}>
-        <Text dimColor>(This notification will disappear in 5 seconds)</Text>
+        <Text dimColor>(This notification will disappear in 20 seconds)</Text>
       </Box>
     </Box>
   );

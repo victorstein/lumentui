@@ -1,7 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import notifierModule = require('node-notifier');
+import { execFile } from 'child_process';
 import { LoggerService } from '../../common/logger/logger.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { ProductDto } from '../api/dto/product.dto';
@@ -53,24 +52,8 @@ export class NotificationService implements OnModuleInit {
         'NotificationService',
       );
 
-      // Send native macOS notification
-      await new Promise<void>((resolve, reject) => {
-        notifierModule.notify(
-          {
-            title: 'LumenTUI - New Product Available',
-            message: message,
-            sound: true,
-            timeout: 10,
-          },
-          (error: Error | null) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve();
-            }
-          },
-        );
-      });
+      // Send native macOS notification via osascript
+      await this.sendNativeNotification(message);
 
       // Update rate limit cache
       this.notificationCache.set(product.id, Date.now());
@@ -120,6 +103,20 @@ export class NotificationService implements OnModuleInit {
     lines.push(`${product.url}`);
 
     return lines.join('\n');
+  }
+
+  /**
+   * Send a native macOS notification via osascript.
+   * Works reliably from detached daemon processes.
+   */
+  private sendNativeNotification(message: string): Promise<void> {
+    const escaped = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const script = `display notification "${escaped}" with title "LumenTUI" subtitle "New Product Available" sound name "default"`;
+    return new Promise<void>((resolve, reject) => {
+      execFile('osascript', ['-e', script], (error) =>
+        error ? reject(error) : resolve(),
+      );
+    });
   }
 
   /**
