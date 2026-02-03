@@ -73,8 +73,8 @@ export const Header: React.FC<HeaderProps> = ({ connected, lastHeartbeat }) => {
           )}
         </Box>
       </Box>
-      <Box>
-        <Text color={theme.colors.border}>{'─'.repeat(80)}</Text>
+      <Box width="100%">
+        <Text color={theme.colors.border}>{'─'.repeat(200)}</Text>
       </Box>
     </Box>
   );
