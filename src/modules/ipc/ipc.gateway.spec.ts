@@ -41,6 +41,13 @@ jest.mock('child_process', () => ({
   exec: jest.fn(),
 }));
 
+// Mock PathsUtil
+jest.mock('../../common/utils/paths.util', () => ({
+  PathsUtil: {
+    getIpcSocketPath: jest.fn(() => '/tmp/lumentui.sock'),
+  },
+}));
+
 describe('IpcGateway', () => {
   let gateway: IpcGateway;
   let module: TestingModule;

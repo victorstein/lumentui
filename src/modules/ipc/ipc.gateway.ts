@@ -14,6 +14,7 @@ import { existsSync, unlinkSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { ProductDto } from '../api/dto/product.dto';
+import { PathsUtil } from '../../common/utils/paths.util';
 
 const execAsync = promisify(exec);
 
@@ -31,7 +32,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {
     this.socketPath = this.configService.get<string>(
       'IPC_SOCKET_PATH',
-      '/tmp/lumentui.sock',
+      PathsUtil.getIpcSocketPath(),
     );
   }
 
