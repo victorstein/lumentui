@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(grep:*)",
+      "Bash(npm run build:*)",
+      "Bash(pnpm run build:*)",
+      "Bash(node:*)",
+      "Bash(pnpm add:*)",
+      "Bash(brew install:*)",
+      "Bash(figlet:*)",
+      "Bash(ls:*)",
+      "Bash(xargs:*)",
+      "Bash(for font in smslant slant small standard doom epic speed thin lean mini ogre roman rounded shadow big block colossal digital gothic graceful graffiti italic letters linux rectangles straight chunky cosmic cybersmall cybermedium cyberlarge)",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(awk:*)",
+      "Bash(pnpm test:*)",
+      "Bash(git stash:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(npx jest:*)",
+      "Bash(pkill:*)",
+      "Bash(pgrep:*)",
+      "Bash(osascript:*)",
+      "Bash(/Users/alfonsogomez/Documents/development/personal/lumentui/node_modules/node-notifier/vendor/mac.noindex/terminal-notifier.app/Contents/MacOS/terminal-notifier:*)",
+      "Bash(brew list:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run format:*)"
+    ]
+  }
+}
