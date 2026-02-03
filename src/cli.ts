@@ -5,7 +5,7 @@ import { NestFactory } from '@nestjs/core';
 import { spawn } from 'child_process';
 import { AuthService } from './modules/auth/auth.service';
 import { ShopifyService } from './modules/api/shopify/shopify.service';
-import { AppModule } from './app.module';
+import { CliModule } from './cli.module';
 import { PidManager } from './common/utils/pid.util';
 import { IpcClient } from './common/utils/ipc-client.util';
 import { DatabaseService } from './modules/storage/database/database.service';
@@ -189,7 +189,7 @@ program
   .action(async (options: { check?: boolean }) => {
     try {
       // Bootstrap NestJS app to get AuthService
-      const app = await NestFactory.createApplicationContext(AppModule, {
+      const app = await NestFactory.createApplicationContext(CliModule, {
         logger: false,
       });
 
@@ -384,7 +384,7 @@ program
   .description('Clear stored authentication cookies')
   .action(async () => {
     try {
-      const app = await NestFactory.createApplicationContext(AppModule, {
+      const app = await NestFactory.createApplicationContext(CliModule, {
         logger: false,
       });
       const authService = app.get(AuthService);
@@ -445,7 +445,7 @@ program
         // Fetch poll data
         try {
           const nestApp = await NestFactory.createApplicationContext(
-            AppModule,
+            CliModule,
             { logger: false },
           );
           const dbService = nestApp.get(DatabaseService);

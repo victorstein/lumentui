@@ -99,53 +99,38 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log('Socket file exists, checking if stale...');
 
+    // Check if any process is listening on this socket using lsof
+    // lsof returns exit code 0 if file is open, non-zero if not
+    let socketInUse = false;
     try {
-      // Check if any process is listening on this socket using lsof
-      // lsof returns exit code 0 if file is open, non-zero if not
       await execAsync(`lsof ${this.socketPath}`);
+      socketInUse = true;
+    } catch {
+      // lsof returns non-zero exit code when socket is not in use
+      socketInUse = false;
+    }
 
-      // If we reach here, the socket is in use by another process
+    if (socketInUse) {
       this.logger.warn(
         'Socket file is in use by another process. Cannot start server.',
       );
       throw new Error(
         `IPC socket ${this.socketPath} is already in use by another process`,
       );
-    } catch (error: unknown) {
-      // lsof returns non-zero exit code if socket is not in use
-      // This means the socket file is stale (no process listening)
-      const errorCode =
-        error && typeof error === 'object' && 'code' in error
-          ? (error as { code: number }).code
-          : undefined;
-      const errorMessage = error instanceof Error ? error.message : '';
+    }
 
-      if (errorCode === 1 || errorMessage.includes('No such')) {
-        this.logger.log('Removing stale socket file');
-        try {
-          unlinkSync(this.socketPath);
-          this.logger.log('Stale socket file removed successfully');
-        } catch (unlinkError: unknown) {
-          const unlinkErrorMessage =
-            unlinkError instanceof Error
-              ? unlinkError.message
-              : 'Unknown error';
-          this.logger.error(
-            `Failed to remove stale socket file: ${unlinkErrorMessage}`,
-          );
-          throw unlinkError;
-        }
-      } else {
-        // Some other error occurred (e.g., lsof not found, permission denied)
-        this.logger.error(`Error checking socket status: ${errorMessage}`);
-        // Attempt to remove socket anyway
-        try {
-          unlinkSync(this.socketPath);
-          this.logger.log('Socket file removed (lsof check failed)');
-        } catch {
-          // Ignore if removal fails
-        }
-      }
+    // Socket file is stale (no process listening), remove it
+    this.logger.log('Removing stale socket file');
+    try {
+      unlinkSync(this.socketPath);
+      this.logger.log('Stale socket file removed successfully');
+    } catch (unlinkError: unknown) {
+      const unlinkErrorMessage =
+        unlinkError instanceof Error ? unlinkError.message : 'Unknown error';
+      this.logger.error(
+        `Failed to remove stale socket file: ${unlinkErrorMessage}`,
+      );
+      throw unlinkError;
     }
   }
 
