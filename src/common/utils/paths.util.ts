@@ -15,11 +15,12 @@ export class PathsUtil {
    * This works for both development and installed packages
    */
   static getInstallDir(): string {
-    // __dirname in compiled code points to dist/
+    // __dirname in compiled code points to dist/common/utils
+    // We need to go up 2 levels to reach dist/
     // For development: /path/to/repo/dist
     // For Homebrew: /opt/homebrew/lib/node_modules/lumentui/dist (or similar)
     // For npm global: /usr/local/lib/node_modules/lumentui/dist (or similar)
-    return path.resolve(__dirname, '..');
+    return path.resolve(__dirname, '..', '..');
   }
 
   /**
@@ -28,7 +29,7 @@ export class PathsUtil {
    */
   static getDaemonPath(): string {
     const installDir = this.getInstallDir();
-    return path.join(installDir, 'dist', 'main.js');
+    return path.join(installDir, 'main.js');
   }
 
   /**
@@ -161,11 +162,11 @@ export class PathsUtil {
 
   /**
    * Check if running in development mode (from repo)
-   * Development mode is detected when package.json exists in install dir
+   * Development mode is detected when package.json exists in parent dir (repo root)
    */
   static isDevMode(): boolean {
     const installDir = this.getInstallDir();
-    const packageJsonPath = path.join(installDir, 'package.json');
+    const packageJsonPath = path.join(installDir, '..', 'package.json');
     return fs.existsSync(packageJsonPath);
   }
 
@@ -176,9 +177,9 @@ export class PathsUtil {
    */
   static getEnvFilePath(): string {
     if (this.isDevMode()) {
-      // Development: use .env in repo root
+      // Development: use .env in repo root (one level up from dist/)
       const installDir = this.getInstallDir();
-      return path.join(installDir, '.env');
+      return path.join(installDir, '..', '.env');
     } else {
       // Production: use .env in config directory
       return path.join(this.getConfigDir(), '.env');
@@ -192,7 +193,7 @@ export class PathsUtil {
   static getVersion(): string {
     try {
       const installDir = this.getInstallDir();
-      const packageJsonPath = path.join(installDir, 'package.json');
+      const packageJsonPath = path.join(installDir, '..', 'package.json');
 
       if (fs.existsSync(packageJsonPath)) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
