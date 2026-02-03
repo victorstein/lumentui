@@ -154,8 +154,14 @@ export class SchedulerService implements OnModuleInit {
         this.ipcGateway.emitProductNew(newProduct);
       }
 
-      // Send notifications for new products
-      if (newProductList.length > 0) {
+      // Send notifications for new products (skip on initial fetch when DB was empty)
+      const isInitialFetch = existingProductEntities.length === 0;
+      if (isInitialFetch && newProductList.length > 0) {
+        this.logger.log(
+          `Initial fetch: skipping notifications for ${newProductList.length} products`,
+          'SchedulerService',
+        );
+      } else if (newProductList.length > 0) {
         this.logger.log(
           `Processing notifications for ${newProductList.length} new products`,
           'SchedulerService',
