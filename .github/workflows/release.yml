@@ -23,6 +23,7 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -36,6 +37,18 @@ jobs:
       - name: Build project
         run: pnpm run build
 
+      - name: Extract version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Create archive of build artifacts
         run: |
           tar -czf lumentui-${{ github.ref_name }}.tar.gz \
@@ -44,37 +57,51 @@ jobs:
             pnpm-lock.yaml \
             README.md
 
-      - name: Extract release notes
-        id: extract_notes
-        run: |
-          VERSION="${{ github.ref_name }}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Creating release for ${VERSION}"
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Release ${{ steps.extract_notes.outputs.version }}
+          name: Release ${{ steps.version.outputs.tag }}
           draft: false
           prerelease: false
+          generate_release_notes: true
           files: |
             lumentui-${{ github.ref_name }}.tar.gz
-          body: |
-            ## LumenTUI ${{ steps.extract_notes.outputs.version }}
-
-            ### Changes
-            - Built with Node.js 20
-            - All tests passing
-            - Production-ready artifacts
-
-            ### Installation
-            ```bash
-            tar -xzf lumentui-${{ github.ref_name }}.tar.gz
-            pnpm install --frozen-lockfile
-            pnpm start
-            ```
-
-            ### Checksums
-            Run `sha256sum lumentui-${{ github.ref_name }}.tar.gz` to verify integrity.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew formula
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA256=$(curl -sL "https://registry.npmjs.org/lumentui/-/lumentui-${VERSION}.tgz" | shasum -a 256 | awk '{print $1}')
+
+          FORMULA=$(cat <<EOF
+          class Lumentui < Formula
+            desc "Elegant NestJS-based product monitoring system with real-time macOS notifications"
+            homepage "https://github.com/victorstein/lumentui"
+            url "https://registry.npmjs.org/lumentui/-/lumentui-${VERSION}.tgz"
+            sha256 "${SHA256}"
+            license "MIT"
+
+            depends_on "node"
+
+            def install
+              system "npm", "install", *std_npm_args
+              bin.install_symlink Dir["#{libexec}/bin/*"]
+            end
+
+            test do
+              system bin/"lumentui", "--help"
+            end
+          end
+          EOF
+          )
+
+          # Clone the tap repo, update formula, and push
+          git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/victorstein/homebrew-lumentui.git /tmp/homebrew-lumentui
+          echo "${FORMULA}" > /tmp/homebrew-lumentui/Formula/lumentui.rb
+          cd /tmp/homebrew-lumentui
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/lumentui.rb
+          git commit -m "lumentui: update to v${VERSION}"
+          git push
