@@ -130,11 +130,21 @@ describe('IpcGateway', () => {
       expect(ipc.server.start).toHaveBeenCalled();
     });
 
-    it('should clean up socket file on graceful shutdown', async () => {
+    it('should not clean up socket file on module destroy (deferred to cleanupSocket)', async () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
 
       await gateway.onModuleInit();
+      (fs.unlinkSync as jest.Mock).mockClear();
       gateway.onModuleDestroy();
+
+      expect(fs.unlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('should clean up socket file when cleanupSocket is called', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+
+      await gateway.onModuleInit();
+      gateway.cleanupSocket();
 
       expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/lumentui.sock');
     });

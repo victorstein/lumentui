@@ -27,7 +27,19 @@ async function bootstrap() {
   // Handle graceful shutdown
   const shutdown = async (signal: string) => {
     logger.log(`Received ${signal}, shutting down gracefully...`, 'Bootstrap');
+
+    // Force exit if graceful shutdown takes too long
+    const forceExitTimeout = setTimeout(() => {
+      logger.warn('Graceful shutdown timed out, forcing exit', 'Bootstrap');
+      process.exit(1);
+    }, 10_000);
+    forceExitTimeout.unref();
+
     await app.close();
+
+    // Clean up socket file after all modules have finished destroying
+    ipcGateway.cleanupSocket();
+
     process.exit(0);
   };
 

@@ -157,11 +157,19 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // Stop accepting new connections but keep socket file until process exits.
+    // node-ipc's stop() already removes the socket file, so we just mark state.
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.stop();
     this.isServerRunning = false;
 
-    // Clean up socket file on graceful shutdown
+    this.logger.log('IPC server stopped');
+  }
+
+  /**
+   * Clean up socket file. Called externally after full shutdown completes.
+   */
+  cleanupSocket(): void {
     if (existsSync(this.socketPath)) {
       try {
         unlinkSync(this.socketPath);
@@ -172,8 +180,6 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`Failed to clean up socket file: ${errorMessage}`);
       }
     }
-
-    this.logger.log('IPC server stopped');
   }
 
   /**
