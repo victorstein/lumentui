@@ -9,27 +9,46 @@ tools: Read, Edit, Write, Bash, Glob, Grep, TodoWrite, Skill
 
 Handles the complete release process for LumenTUI, including npm publishing, GitHub releases, and Homebrew formula updates.
 
+## ⚡ IMPORTANT: Automated Release via GitHub Actions
+
+**LumenTUI uses GitHub Actions for automated releases!**
+
+The release process is **mostly automated** through `.github/workflows/release.yml`. When you push a version tag, GitHub Actions automatically:
+
+1. ✅ Runs tests and linting
+2. ✅ Builds the project
+3. ✅ Publishes to npm
+4. ✅ Creates GitHub release with auto-generated notes
+5. ✅ Updates Homebrew tap formula automatically
+
+**Your job:** Just prepare and push the tag. GitHub does the rest!
+
+---
+
 ## Release Workflow
 
-### Pre-Release Checks
+### Pre-Release Checks (Local)
 
-Before creating any release, verify quality gates:
+Before creating a release, verify quality gates locally:
 
 ```bash
 # 1. TypeScript compilation
-npm run build
+pnpm run build
 
 # 2. All tests pass
-npm test
+pnpm test
 
 # 3. Code coverage meets threshold (>90% for services)
-npm run test:cov
+pnpm run test:cov
 
 # 4. Linting passes
-npm run lint
+pnpm run lint
 
 # 5. Git status clean (no uncommitted changes)
 git status
+
+# 6. On correct branch (develop or main)
+git branch --show-current
 ```
 
 **If any check fails, STOP and fix issues before proceeding.**
@@ -48,9 +67,15 @@ Follow [SemVer](https://semver.org/) conventions:
 
 ---
 
-## Release Process
+## Simple Release Process (Recommended)
 
-### Step 1: Version Bump
+### Step 1: Run Pre-Release Checks
+
+```bash
+pnpm run build && pnpm test && pnpm run lint
+```
+
+### Step 2: Version Bump
 
 ```bash
 # Choose release type:
@@ -64,41 +89,60 @@ npm version major   # Breaking changes (1.2.2 → 2.0.0)
 # - Creates git tag "v1.2.3"
 ```
 
-### Step 2: Build & Verify
+### Step 3: Push Tag to Trigger Automation
 
 ```bash
-# Full build
-npm run build
+# Push the tag (triggers GitHub Actions release workflow)
+git push --tags
 
-# Verify dist/ output
-ls -la dist/
-
-# Expected output:
-# - dist/main.js (daemon)
-# - dist/cli.js (CLI with shebang)
-# - dist/ui/ (TUI components)
-
-# Test dry-run
-npm pack --dry-run
+# Push the commit
+git push origin develop  # or main
 ```
 
-### Step 3: Publish to npm
+### Step 4: Wait for GitHub Actions
+
+GitHub Actions `.github/workflows/release.yml` will automatically:
+
+1. **Run Quality Checks** - Tests, linting, coverage
+2. **Build Project** - `pnpm run build`
+3. **Publish to npm** - Using `NPM_TOKEN` secret
+4. **Create GitHub Release** - With auto-generated release notes and tarball
+5. **Update Homebrew Formula** - Calculates SHA256, updates `victorstein/homebrew-lumentui` repo
+
+**Watch progress:** https://github.com/victorstein/lumentui/actions
+
+### Step 5: Verify Release
 
 ```bash
-# Login to npm (if not already)
-npm login
-
-# Publish package
-npm publish
-
-# If scoped package:
-npm publish --access public
-
-# Verify publication
+# Check npm
 npm view lumentui version
+
+# Check GitHub release
+gh release view v<version>
+
+# Check Homebrew tap (wait ~1 min for push)
+curl https://raw.githubusercontent.com/victorstein/homebrew-lumentui/main/Formula/lumentui.rb
 ```
 
-**Result:** Package available at `https://www.npmjs.com/package/lumentui`
+**Result:**
+
+- 📦 npm: `https://www.npmjs.com/package/lumentui`
+- 🐙 GitHub: `https://github.com/victorstein/lumentui/releases`
+- 🍺 Homebrew: `brew install victorstein/lumentui/lumentui`
+
+---
+
+## Manual Release Process (Emergency Fallback Only)
+
+**⚠️ WARNING: This section is for emergencies only.**
+
+The normal release process is fully automated via GitHub Actions. Only use these manual steps if:
+
+- GitHub Actions workflow is broken
+- npm registry is unavailable
+- You need to debug the release process
+
+For normal releases, use the "Simple Release Process" above.
 
 ### Step 4: Create GitHub Release
 
@@ -148,9 +192,9 @@ EOF
 
 **Result:** Release available at `https://github.com/victorstein/lumentui/releases/tag/v$VERSION`
 
-### Step 5: Update Homebrew Formula (Optional)
+### Manual Homebrew Formula Update (Fallback Only)
 
-**Only needed if users install via Homebrew.**
+**⚠️ GitHub Actions handles this automatically. Only use if automation fails.**
 
 #### Get SHA256 Hash
 
@@ -248,9 +292,11 @@ lumentui --help
 - Verify release notes are formatted correctly
 - Check tag exists: `git tag | grep v$VERSION`
 
-### Verify Homebrew (if updated)
+### Verify Homebrew
 
 ```bash
+# Wait ~1 minute for GitHub Actions to push formula update
+
 # Check formula version
 brew info lumentui
 
@@ -273,15 +319,18 @@ If a release has critical issues:
 git checkout develop
 # ... make fixes ...
 
-# Create hotfix release
-npm version patch
-npm run build
-npm test
-npm publish
+# Run pre-release checks
+pnpm run build && pnpm test && pnpm run lint
 
-# Create new GitHub release
+# Create hotfix release (GitHub Actions will handle publishing)
+npm version patch
 git push --tags
-gh release create v[new-version] --notes "Hotfix: [describe fix]"
+git push origin develop
+
+# GitHub Actions will automatically:
+# - Publish to npm
+# - Create GitHub release
+# - Update Homebrew formula
 ```
 
 ### Option 2: Deprecate npm Package
@@ -361,55 +410,40 @@ git push --tags
 
 ---
 
-## Release Checklist
+## Release Checklist (Automated Workflow)
 
-Use this checklist for every release:
+Use this simplified checklist for automated releases:
 
 ```markdown
-### Pre-Release
+### Pre-Release (Local)
 
-- [ ] All tests pass: `npm test`
-- [ ] Code coverage >90%: `npm run test:cov`
-- [ ] Build succeeds: `npm run build`
-- [ ] Linting passes: `npm run lint`
+- [ ] All tests pass: `pnpm test`
+- [ ] Code coverage >90%: `pnpm run test:cov`
+- [ ] Build succeeds: `pnpm run build`
+- [ ] Linting passes: `pnpm run lint`
 - [ ] Git status clean: `git status`
 - [ ] On correct branch (develop or main)
 
-### Version Bump
+### Version Bump & Push
 
 - [ ] Run `npm version [patch|minor|major]`
 - [ ] Verify package.json version updated
 - [ ] Verify git tag created
-
-### Build & Publish
-
-- [ ] Full build: `npm run build`
-- [ ] Dry-run: `npm pack --dry-run`
-- [ ] Publish: `npm publish`
-- [ ] Verify on npm: `npm view lumentui version`
-
-### GitHub Release
-
-- [ ] Push tags: `git push --tags`
+- [ ] Push tag: `git push --tags`
 - [ ] Push branch: `git push origin develop`
-- [ ] Create release: `gh release create v$VERSION`
-- [ ] Verify release notes
-- [ ] Mark as latest release
 
-### Homebrew (if applicable)
+### Monitor GitHub Actions
 
-- [ ] Get SHA256: `curl -L ... | shasum -a 256`
-- [ ] Update Formula/lumentui.rb
-- [ ] Commit and push formula
-- [ ] Test: `brew upgrade lumentui`
+- [ ] Watch workflow: https://github.com/victorstein/lumentui/actions
+- [ ] Verify all steps pass (build, test, publish, release, homebrew)
 
-### Post-Release
+### Post-Release Verification
 
-- [ ] Verify npm package: `npm view lumentui`
-- [ ] Verify GitHub release exists
+- [ ] Verify npm package: `npm view lumentui version`
+- [ ] Verify GitHub release: https://github.com/victorstein/lumentui/releases
+- [ ] Verify Homebrew formula: `curl https://raw.githubusercontent.com/victorstein/homebrew-lumentui/main/Formula/lumentui.rb`
 - [ ] Test clean install: `npm install -g lumentui`
 - [ ] Verify version: `lumentui --version`
-- [ ] Update documentation if needed
 ```
 
 ---
@@ -509,18 +543,20 @@ bd sync
 
 ## Key Files
 
-| File                | Purpose                         |
-| ------------------- | ------------------------------- |
-| `package.json`      | Version source of truth         |
-| `HOMEBREW_SETUP.md` | Homebrew distribution guide     |
-| `DEPLOYMENT.md`     | Production deployment guide     |
-| `CONTRIBUTING.md`   | Commit message conventions      |
-| `.npmignore`        | Files excluded from npm package |
+| File                            | Purpose                            |
+| ------------------------------- | ---------------------------------- |
+| `package.json`                  | Version source of truth            |
+| `.github/workflows/release.yml` | Automated release workflow (CI/CD) |
+| `HOMEBREW_SETUP.md`             | Homebrew distribution guide        |
+| `DEPLOYMENT.md`                 | Production deployment guide        |
+| `CONTRIBUTING.md`               | Commit message conventions         |
+| `.npmignore`                    | Files excluded from npm package    |
 
 ---
 
 ## References
 
+- [GitHub Actions Docs](https://docs.github.com/en/actions)
 - [npm Publishing Docs](https://docs.npmjs.com/cli/v9/commands/npm-publish)
 - [Semantic Versioning](https://semver.org/)
 - [Conventional Commits](https://www.conventionalcommits.org/)
