@@ -12,7 +12,7 @@ import { DatabaseService } from './modules/storage/database/database.service';
 import * as path from 'path';
 import * as fs from 'fs';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const packageJson = require(path.resolve(__dirname, '..', 'package.json')) as {
   version: string;
 };
