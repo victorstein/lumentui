@@ -95,25 +95,32 @@ LumenTUI uses a **Git Flow** workflow with two primary branches:
    - Never push directly - use @release agent
    - Always production-ready
 
-**Release Workflow** (handled by @release agent):
+**Release Workflow** (automated via GitHub Actions):
 
 ```bash
-# User tests develop branch locally first
-# When ready for release, user requests:
-# "Create a new release" → delegates to @release agent
+# Manual steps (handled by @release agent):
+# 1. User tests develop branch locally first
+# 2. Bump version in package.json on develop (npm version patch|minor|major)
+# 3. Commit version bump to develop
+# 4. Merge develop → main (via PR or direct merge)
 
-# Release agent will:
-# 1. Run quality checks on develop
-# 2. Merge develop → main
-# 3. Bump version in package.json
-# 4. Create git tag (v1.2.3)
-# 5. Push main + tags
-# 6. Publish to npm
-# 7. Create GitHub release
-# 8. Update Homebrew formula
+# Automated steps (GitHub Actions on push to main):
+# 1. ✅ Run quality checks (build, test, lint)
+# 2. ✅ Check if version already released (skip if duplicate)
+# 3. ✅ Create git tag (v1.2.3)
+# 4. ✅ Publish to npm
+# 5. ✅ Create GitHub release with notes
+# 6. ✅ Update Homebrew formula
+# 7. ✅ Push tag to repository
 ```
 
-**IMPORTANT**: Never merge develop to main manually. Always use the @release agent to ensure proper versioning, tagging, and publishing.
+**Workflow:** `.github/workflows/release.yml` triggers on every push to `main`
+
+**IMPORTANT**:
+
+- Always bump version in package.json BEFORE merging to main
+- GitHub Actions will automatically publish when main is updated
+- Never merge develop to main without version bump
 
 ### Beads Discipline
 
@@ -418,35 +425,38 @@ Use the appropriate patterns for implementation.
 
 ### @release
 
-- **Purpose**: Complete release process following Git Flow workflow
-- **Codebase**: `package.json`, `HOMEBREW_SETUP.md`, `DEPLOYMENT.md`
-- **Critical**: Only agent authorized to update `main` branch
+- **Purpose**: Prepare releases for automated GitHub Actions workflow
+- **Codebase**: `package.json`, `.github/workflows/release.yml`, `HOMEBREW_SETUP.md`
+- **Critical**: Handles version bumping and merging to main (triggers automation)
 - **Use for**:
   - Creating new releases (patch, minor, major)
-  - Merging develop → main (with proper versioning)
-  - Publishing to npm registry
-  - Creating GitHub releases with tags
-  - Updating Homebrew formula
+  - Bumping version in package.json
+  - Merging develop → main (triggers automated publishing)
   - Post-release verification
-- **Git Flow workflow**:
+- **Manual workflow** (agent handles):
   1. Verify develop branch is tested and ready
-  2. Run pre-release quality checks (tests, coverage, lint, build)
-  3. Checkout main branch and merge develop
-  4. Bump version in package.json (npm version patch|minor|major)
-  5. Create git tag (v1.2.3)
-  6. Push main branch + tags to origin
-  7. Publish to npm registry
-  8. Create GitHub release with changelog
-  9. Update Homebrew tap formula
-  10. Merge main back to develop (to sync version number)
+  2. Run pre-release quality checks on develop (tests, coverage, lint, build)
+  3. Bump version in package.json on develop (npm version patch|minor|major)
+  4. Commit version bump to develop
+  5. Create PR or merge develop → main
+  6. Verify automated release succeeded
+- **Automated workflow** (GitHub Actions on push to main):
+  1. ✅ Quality checks (build, test, lint)
+  2. ✅ Check if version already released (prevent duplicates)
+  3. ✅ Create git tag (v1.2.3)
+  4. ✅ Publish to npm registry
+  5. ✅ Create GitHub release with notes
+  6. ✅ Update Homebrew tap formula
+  7. ✅ Summary report in Actions UI
 - **Key tasks**:
-  - Pre-release quality checks (tests, coverage, lint, build)
+  - Pre-release quality checks on develop
   - Version bumping with `npm version`
-  - Git Flow branch management (develop → main)
-  - npm publishing workflow
-  - GitHub release creation with release notes
-  - Homebrew tap formula updates
+  - Creating PR to merge develop → main
+  - Monitoring GitHub Actions workflow
+  - Post-release verification (npm, Homebrew, GitHub)
   - Rollback procedures if needed
+
+**Note**: Publishing to npm, creating releases, and updating Homebrew are now fully automated via GitHub Actions when code is pushed to main. Agent only needs to prepare the version and merge.
 
 ---
 
