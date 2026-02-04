@@ -334,6 +334,7 @@ describe('DatabaseService', () => {
   describe('notification methods', () => {
     beforeEach(() => {
       service.saveProducts(mockProducts);
+      service['db'].run('DELETE FROM notifications');
     });
 
     it('should record notification', () => {
@@ -385,6 +386,7 @@ describe('DatabaseService', () => {
   describe('getNotificationHistory with filters', () => {
     beforeEach(() => {
       service.saveProducts(mockProducts);
+      service['db'].run('DELETE FROM notifications');
     });
 
     it('should filter by productId', () => {
@@ -518,6 +520,7 @@ describe('DatabaseService', () => {
   describe('getNotificationStats', () => {
     beforeEach(() => {
       service.saveProducts(mockProducts);
+      service['db'].run('DELETE FROM notifications');
     });
 
     it('should return stats for sent and failed notifications', () => {
@@ -580,6 +583,325 @@ describe('DatabaseService', () => {
       expect(stats.totalSent).toBe(0);
       expect(stats.totalFailed).toBe(0);
       expect(stats.countByProduct).toHaveLength(0);
+    });
+  });
+
+  describe('pruneNotificationHistory', () => {
+    beforeEach(() => {
+      service.saveProducts(mockProducts);
+      service['db'].run('DELETE FROM notifications');
+    });
+
+    it('should delete notifications older than 30 days', () => {
+      const db = service.getDatabase();
+      const now = Date.now();
+      const thirtyOneDaysAgo = now - 31 * 24 * 60 * 60 * 1000;
+      const twentyNineDaysAgo = now - 29 * 24 * 60 * 60 * 1000;
+
+      db.run(
+        'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+        ['123', thirtyOneDaysAgo, 1],
+      );
+      db.run(
+        'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+        ['123', twentyNineDaysAgo, 1],
+      );
+
+      const recordsDeleted = service.pruneNotificationHistory();
+
+      expect(recordsDeleted).toBe(1);
+
+      const remaining = service.getNotificationHistory();
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].timestamp).toBe(twentyNineDaysAgo);
+    });
+
+    it('should keep only the most recent 100 records when more than 100 exist', () => {
+      const db = service.getDatabase();
+      const now = Date.now();
+
+      for (let i = 0; i < 150; i++) {
+        db.run(
+          'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+          ['123', now - i * 1000, 1],
+        );
+      }
+
+      const recordsDeleted = service.pruneNotificationHistory();
+
+      expect(recordsDeleted).toBe(50);
+
+      const remaining = service.getNotificationHistory();
+      expect(remaining).toHaveLength(100);
+    });
+
+    it('should use the more restrictive deletion logic', () => {
+      const db = service.getDatabase();
+      const now = Date.now();
+      const thirtyOneDaysAgo = now - 31 * 24 * 60 * 60 * 1000;
+
+      for (let i = 0; i < 40; i++) {
+        db.run(
+          'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+          ['123', thirtyOneDaysAgo - i * 1000, 1],
+        );
+      }
+
+      for (let i = 0; i < 80; i++) {
+        db.run(
+          'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+          ['123', now - i * 1000, 1],
+        );
+      }
+
+      const recordsDeleted = service.pruneNotificationHistory();
+
+      expect(recordsDeleted).toBe(40);
+
+      const remaining = service.getNotificationHistory();
+      expect(remaining).toHaveLength(80);
+    });
+
+    it('should record cleanup metadata after pruning', () => {
+      const db = service.getDatabase();
+      const now = Date.now();
+      const thirtyOneDaysAgo = now - 31 * 24 * 60 * 60 * 1000;
+
+      db.run(
+        'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+        ['123', thirtyOneDaysAgo, 1],
+      );
+      db.run(
+        'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+        ['123', now, 1],
+      );
+
+      const recordsDeleted = service.pruneNotificationHistory();
+
+      expect(recordsDeleted).toBe(1);
+
+      const stmt = db.prepare(
+        'SELECT * FROM notification_history_metadata ORDER BY id DESC LIMIT 1',
+      );
+      stmt.step();
+      const metadata = stmt.getAsObject() as {
+        last_cleanup_timestamp: string;
+        records_deleted: number;
+        created_at: string;
+      };
+      stmt.free();
+
+      expect(metadata.records_deleted).toBe(1);
+      expect(metadata.last_cleanup_timestamp).toBeDefined();
+      expect(metadata.created_at).toBeDefined();
+    });
+
+    it('should handle empty notification table', () => {
+      const recordsDeleted = service.pruneNotificationHistory();
+
+      expect(recordsDeleted).toBe(0);
+
+      const history = service.getNotificationHistory();
+      expect(history).toHaveLength(0);
+    });
+
+    it('should handle exactly 100 records', () => {
+      const db = service.getDatabase();
+      const now = Date.now();
+
+      for (let i = 0; i < 100; i++) {
+        db.run(
+          'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+          ['123', now - i * 1000, 1],
+        );
+      }
+
+      const recordsDeleted = service.pruneNotificationHistory();
+
+      expect(recordsDeleted).toBe(0);
+
+      const remaining = service.getNotificationHistory();
+      expect(remaining).toHaveLength(100);
+    });
+
+    it('should handle less than 100 records all within 30 days', () => {
+      const db = service.getDatabase();
+      const now = Date.now();
+
+      for (let i = 0; i < 50; i++) {
+        db.run(
+          'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+          ['123', now - i * 1000, 1],
+        );
+      }
+
+      const recordsDeleted = service.pruneNotificationHistory();
+
+      expect(recordsDeleted).toBe(0);
+
+      const remaining = service.getNotificationHistory();
+      expect(remaining).toHaveLength(50);
+    });
+
+    it('should return 0 on error and not throw', () => {
+      const db = service.getDatabase();
+
+      db.run(
+        'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+        ['123', Date.now(), 1],
+      );
+
+      const originalRun = db.run.bind(db);
+      let callCount = 0;
+      db.run = jest.fn((sql: string, ...params: any[]) => {
+        callCount++;
+        if (callCount === 2) {
+          throw new Error('Simulated database error');
+        }
+        return originalRun(sql, ...params);
+      });
+
+      const recordsDeleted = service.pruneNotificationHistory();
+
+      expect(recordsDeleted).toBe(0);
+
+      const history = service.getNotificationHistory();
+      expect(history).toHaveLength(1);
+    });
+
+    it('should keep the most recent 100 when deleting by limit', () => {
+      const db = service.getDatabase();
+      const now = Date.now();
+
+      for (let i = 0; i < 150; i++) {
+        db.run(
+          'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+          ['123', now - i * 60000, 1],
+        );
+      }
+
+      service.pruneNotificationHistory();
+
+      const remaining = service.getNotificationHistory({ limit: 200 });
+      expect(remaining).toHaveLength(100);
+
+      const oldestRemaining = Math.min(...remaining.map((r) => r.timestamp));
+      expect(oldestRemaining).toBeGreaterThan(now - 100 * 60000);
+    });
+
+    it('should record multiple cleanup operations', () => {
+      const db = service.getDatabase();
+      const now = Date.now();
+      const thirtyOneDaysAgo = now - 31 * 24 * 60 * 60 * 1000;
+
+      db.run(
+        'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+        ['123', thirtyOneDaysAgo, 1],
+      );
+
+      service.pruneNotificationHistory();
+
+      db.run(
+        'INSERT INTO notifications (product_id, timestamp, sent) VALUES (?, ?, ?)',
+        ['123', thirtyOneDaysAgo, 1],
+      );
+
+      service.pruneNotificationHistory();
+
+      const stmt = db.prepare(
+        'SELECT COUNT(*) as count FROM notification_history_metadata',
+      );
+      stmt.step();
+      const result = stmt.getAsObject() as { count: number };
+      stmt.free();
+
+      expect(result.count).toBe(2);
+    });
+  });
+
+  describe('error handling', () => {
+    it('should handle getNotificationHistory errors gracefully', () => {
+      const db = service.getDatabase();
+      const originalPrepare = db.prepare.bind(db);
+
+      db.prepare = jest.fn(() => {
+        throw new Error('Database error');
+      });
+
+      const result = service.getNotificationHistory();
+
+      expect(result).toEqual([]);
+
+      db.prepare = originalPrepare;
+    });
+
+    it('should handle getNotificationStats errors gracefully', () => {
+      const db = service.getDatabase();
+      const originalPrepare = db.prepare.bind(db);
+
+      db.prepare = jest.fn(() => {
+        throw new Error('Database error');
+      });
+
+      const result = service.getNotificationStats();
+
+      expect(result).toEqual({
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      });
+
+      db.prepare = originalPrepare;
+    });
+
+    it('should handle getRecentNotifications errors gracefully', () => {
+      const db = service.getDatabase();
+      const originalPrepare = db.prepare.bind(db);
+
+      db.prepare = jest.fn(() => {
+        throw new Error('Database error');
+      });
+
+      const result = service.getRecentNotifications(Date.now() - 60000);
+
+      expect(result).toEqual([]);
+
+      db.prepare = originalPrepare;
+    });
+
+    it('should handle recordNotification errors gracefully', () => {
+      const db = service.getDatabase();
+      const originalRun = db.run.bind(db);
+
+      db.run = jest.fn(() => {
+        throw new Error('Database error');
+      });
+
+      expect(() => {
+        service.recordNotification('123', true);
+      }).not.toThrow();
+
+      db.run = originalRun;
+    });
+
+    it('should handle saveProducts errors with rollback', () => {
+      const db = service.getDatabase();
+      const originalRun = db.run.bind(db);
+      let callCount = 0;
+
+      db.run = jest.fn((sql: string, ...params: any[]) => {
+        callCount++;
+        if (callCount === 3) {
+          throw new Error('Database error during insert');
+        }
+        return originalRun(sql, ...params);
+      });
+
+      expect(() => {
+        service.saveProducts(mockProducts);
+      }).toThrow('Database error during insert');
+
+      db.run = originalRun;
     });
   });
 });
