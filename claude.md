@@ -70,6 +70,51 @@ Use `pnpm` exclusively. The project uses pnpm, not npm or yarn.
   ```
 - Follow beads workflow for commits (see below)
 
+### Git Flow Branching Strategy
+
+LumenTUI uses a **Git Flow** workflow with two primary branches:
+
+| Branch    | Purpose                          | Who Pushes                  |
+| --------- | -------------------------------- | --------------------------- |
+| `main`    | Stable releases (versioned)      | Only via release agent      |
+| `develop` | Active development (all changes) | Orchestrator & agents daily |
+
+**Branch Rules:**
+
+1. **develop branch**:
+   - All development work happens here
+   - Feature branches merge into develop
+   - All commits from orchestrator/agents go to develop
+   - Regular pushes after work is complete
+   - May contain unreleased/untested features
+
+2. **main branch**:
+   - Protected - only updated via release process
+   - Contains only tested, versioned releases
+   - Each commit should be tagged (v1.2.3)
+   - Never push directly - use @release agent
+   - Always production-ready
+
+**Release Workflow** (handled by @release agent):
+
+```bash
+# User tests develop branch locally first
+# When ready for release, user requests:
+# "Create a new release" → delegates to @release agent
+
+# Release agent will:
+# 1. Run quality checks on develop
+# 2. Merge develop → main
+# 3. Bump version in package.json
+# 4. Create git tag (v1.2.3)
+# 5. Push main + tags
+# 6. Publish to npm
+# 7. Create GitHub release
+# 8. Update Homebrew formula
+```
+
+**IMPORTANT**: Never merge develop to main manually. Always use the @release agent to ensure proper versioning, tagging, and publishing.
+
 ### Beads Discipline
 
 - Check for pending work before starting new tasks: `bd ready`
@@ -373,17 +418,31 @@ Use the appropriate patterns for implementation.
 
 ### @release
 
-- **Purpose**: Complete release process for npm, GitHub, and Homebrew
+- **Purpose**: Complete release process following Git Flow workflow
 - **Codebase**: `package.json`, `HOMEBREW_SETUP.md`, `DEPLOYMENT.md`
+- **Critical**: Only agent authorized to update `main` branch
 - **Use for**:
   - Creating new releases (patch, minor, major)
+  - Merging develop → main (with proper versioning)
   - Publishing to npm registry
   - Creating GitHub releases with tags
   - Updating Homebrew formula
   - Post-release verification
+- **Git Flow workflow**:
+  1. Verify develop branch is tested and ready
+  2. Run pre-release quality checks (tests, coverage, lint, build)
+  3. Checkout main branch and merge develop
+  4. Bump version in package.json (npm version patch|minor|major)
+  5. Create git tag (v1.2.3)
+  6. Push main branch + tags to origin
+  7. Publish to npm registry
+  8. Create GitHub release with changelog
+  9. Update Homebrew tap formula
+  10. Merge main back to develop (to sync version number)
 - **Key tasks**:
   - Pre-release quality checks (tests, coverage, lint, build)
   - Version bumping with `npm version`
+  - Git Flow branch management (develop → main)
   - npm publishing workflow
   - GitHub release creation with release notes
   - Homebrew tap formula updates
