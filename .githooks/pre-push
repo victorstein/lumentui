@@ -17,7 +17,7 @@ FAILED=0
 
 # 1. Format check
 echo "📝 Checking code formatting..."
-if pnpm run format:check --silent; then
+if pnpm run format:check >/dev/null 2>&1; then
   echo -e "${GREEN}✅ Formatting check passed${NC}"
 else
   echo -e "${RED}❌ Formatting check failed${NC}"
@@ -28,7 +28,7 @@ echo ""
 
 # 2. Lint
 echo "🔎 Running linter..."
-if pnpm run lint --silent; then
+if pnpm run lint >/dev/null 2>&1; then
   echo -e "${GREEN}✅ Linting passed${NC}"
 else
   echo -e "${RED}❌ Linting failed${NC}"
@@ -38,7 +38,7 @@ echo ""
 
 # 3. Type check
 echo "🔧 Type checking..."
-if pnpm run type-check --silent; then
+if pnpm run type-check >/dev/null 2>&1; then
   echo -e "${GREEN}✅ Type check passed${NC}"
 else
   echo -e "${RED}❌ Type check failed${NC}"
@@ -48,7 +48,7 @@ echo ""
 
 # 4. Tests
 echo "🧪 Running tests..."
-if pnpm test --silent 2>/dev/null; then
+if pnpm test >/dev/null 2>&1; then
   echo -e "${GREEN}✅ Tests passed${NC}"
 else
   echo -e "${RED}❌ Tests failed${NC}"
@@ -58,7 +58,7 @@ echo ""
 
 # 5. Build
 echo "🏗️  Building project..."
-if pnpm run build --silent; then
+if pnpm run build >/dev/null 2>&1; then
   echo -e "${GREEN}✅ Build passed${NC}"
 else
   echo -e "${RED}❌ Build failed${NC}"
