@@ -44,6 +44,21 @@ Reviews code changes before committing.
 - [ ] Functions: `camelCase`
 - [ ] Run: `pnpm run lint`
 
+### Code Comments (CRITICAL)
+
+- [ ] **NO unnecessary comments** — code must be self-documenting
+- [ ] Comments ONLY for: complex algorithms, workarounds (with justification), security concerns
+- [ ] NO comments explaining what code does (name/structure should show this)
+- [ ] NO obvious comments (`// increment counter`, `// loop through items`)
+- [ ] If comment exists, verify it explains "why" not "what"
+
+### Module Resolution
+
+- [ ] **Uses `PathsUtil`** for all file/directory paths
+- [ ] NO direct use of `__dirname` or `import.meta.url`
+- [ ] NO hardcoded paths (`/tmp/`, `./data/`)
+- [ ] Cross-platform compatible (macOS, Linux, Windows)
+
 ### Testing
 
 - [ ] Tests pass: `pnpm test`
