@@ -22,7 +22,7 @@ Reviews code changes before committing.
 
 - [ ] No `// @ts-ignore` or `as any`
 - [ ] Proper type definitions
-- [ ] Build passes: `npm run build`
+- [ ] Build passes: `pnpm run build`
 
 ### NestJS Patterns
 
@@ -42,17 +42,32 @@ Reviews code changes before committing.
 - [ ] Files: `kebab-case.ts`
 - [ ] Classes: `PascalCase`
 - [ ] Functions: `camelCase`
-- [ ] Run: `npm run lint`
+- [ ] Run: `pnpm run lint`
+
+### Code Comments (CRITICAL)
+
+- [ ] **NO unnecessary comments** — code must be self-documenting
+- [ ] Comments ONLY for: complex algorithms, workarounds (with justification), security concerns
+- [ ] NO comments explaining what code does (name/structure should show this)
+- [ ] NO obvious comments (`// increment counter`, `// loop through items`)
+- [ ] If comment exists, verify it explains "why" not "what"
+
+### Module Resolution
+
+- [ ] **Uses `PathsUtil`** for all file/directory paths
+- [ ] NO direct use of `__dirname` or `import.meta.url`
+- [ ] NO hardcoded paths (`/tmp/`, `./data/`)
+- [ ] Cross-platform compatible (macOS, Linux, Windows)
 
 ### Testing
 
-- [ ] Tests pass: `npm test`
-- [ ] E2E tests pass: `npm run test:e2e`
+- [ ] Tests pass: `pnpm test`
+- [ ] E2E tests pass: `pnpm run test:e2e`
 - [ ] Coverage for critical paths
 
 ## Review Process
 
-1. Run automated checks (`npm run build && npm test && npm run lint`)
+1. Run automated checks (`pnpm run build && pnpm test && pnpm run lint`)
 2. Review changed files
 3. Provide categorized feedback:
    - Critical (blocks merge)

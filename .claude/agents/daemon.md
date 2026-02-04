@@ -38,12 +38,50 @@ SchedulerService (@Cron every 30min or forcePoll)
   → NotificationService.shouldNotify() → sendAvailabilityNotification()
 ```
 
+## Code Standards
+
+### Self-Documenting Code (Comments Restricted)
+
+**CRITICAL:** Code must be self-documenting. Comments are restricted to only critical scenarios.
+
+Write clear code through:
+
+- Descriptive variable/function names
+- Small, focused functions
+- TypeScript types that convey intent
+
+**ONLY comment for:**
+
+- Complex algorithms where "why" isn't obvious
+- Workarounds for bugs (with ESLint justifications)
+- Security-sensitive code
+
+**NEVER comment for:**
+
+- What code does (code should show this)
+- Obvious operations
+- Function purposes (name should convey this)
+
+**Before commenting, ask:**
+
+1. Can I rename to make this clearer?
+2. Can I refactor into smaller functions?
+3. Can I use types to convey this?
+
+### Module Resolution (ESM/CommonJS)
+
+**ALWAYS use `PathsUtil` for file paths** — never use `__dirname` or `import.meta` directly.
+
+`PathsUtil.getDirname()` handles both CommonJS (tests) and ESM (production) using a `Function()` wrapper to hide `import.meta` from Jest's parser.
+
+See `src/common/utils/paths.util.ts:19-31` for the canonical implementation.
+
 ## Quick Commands
 
 ```bash
-npm run start:daemon   # Run daemon directly
-npm run dev            # Watch mode
-npm test               # Run tests
+pnpm run start:daemon   # Run daemon directly
+pnpm run dev            # Watch mode
+pnpm test               # Run tests
 ```
 
 ## Task Completion

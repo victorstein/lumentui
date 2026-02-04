@@ -150,6 +150,24 @@ lumentui-xxx: Feature Epic [epic]         <- Level 1: Epic
 
 ---
 
+## Code Standards Awareness
+
+When creating implementation plans, ensure subtasks respect these standards:
+
+### Self-Documenting Code
+
+- Code must be clear through naming and structure
+- Comments restricted to critical scenarios only
+- Agents should focus on clean code, not documentation
+
+### Module Resolution
+
+- All file path operations use `PathsUtil`
+- No direct use of `__dirname` or `import.meta.url`
+- Cross-platform compatibility required
+
+---
+
 ## When to Create Plans
 
 **Do plan:**

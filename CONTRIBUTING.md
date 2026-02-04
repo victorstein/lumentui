@@ -36,11 +36,11 @@ Thank you for considering contributing to LumentuiAPI! This document provides gu
 Before contributing, ensure you have:
 
 - Node.js 18.x or higher
-- npm 9.x or higher
-- macOS (for Chrome Keychain features)
+- pnpm 8.x or higher (package manager - **NOT npm or yarn**)
+- macOS (for Chrome Keychain features and notifications)
 - Chrome browser
 - Git configured with your name and email
-- Familiarity with TypeScript and NestJS
+- Familiarity with TypeScript, NestJS, and Ink (React for CLI)
 
 ### Fork and Clone
 
@@ -58,11 +58,71 @@ cd lumentui
 git remote add upstream https://github.com/victorstein/lumentui.git
 ```
 
-4. Create a feature branch:
+4. Create a feature branch from **develop**:
 
 ```bash
+git checkout develop
+git pull upstream develop
 git checkout -b feature/your-feature-name
 ```
+
+### Branching Strategy
+
+LumenTUI uses **Git Flow** workflow with two primary branches:
+
+| Branch    | Purpose                                   | Protected |
+| --------- | ----------------------------------------- | --------- |
+| `main`    | Stable releases only (versioned, tagged)  | ✅ Yes    |
+| `develop` | Active development (all feature branches) | ⚠️ No     |
+
+**Important Rules:**
+
+1. **All development happens on `develop`**
+   - Create feature branches from `develop`
+   - Submit pull requests to `develop` (NOT `main`)
+   - `develop` may contain unreleased/untested features
+
+2. **`main` is protected**
+   - Contains only tested, production-ready releases
+   - Each commit is tagged with a version (e.g., `v1.2.3`)
+   - Only updated during release process by maintainers
+   - Never submit PRs directly to `main`
+
+3. **Feature branch workflow:**
+
+```bash
+# Start new feature
+git checkout develop
+git pull upstream develop
+git checkout -b feature/my-new-feature
+
+# Work on your feature
+git add .
+git commit -m "feat: add new feature"
+
+# Keep your branch up to date
+git fetch upstream
+git rebase upstream/develop
+
+# Push to your fork
+git push origin feature/my-new-feature
+
+# Submit PR to upstream/develop (NOT main)
+```
+
+4. **Release workflow** (maintainers only):
+   - Test features on `develop` branch
+   - When ready, merge `develop` → `main`
+   - Tag release with version (v1.2.3)
+   - Publish to npm
+   - Create GitHub release
+
+**Branch Naming Conventions:**
+
+- Features: `feature/description` (e.g., `feature/notification-history`)
+- Bug fixes: `fix/description` (e.g., `fix/connection-timeout`)
+- Documentation: `docs/description` (e.g., `docs/update-readme`)
+- Refactoring: `refactor/description` (e.g., `refactor/cleanup-auth`)
 
 ---
 
@@ -71,7 +131,7 @@ git checkout -b feature/your-feature-name
 ### Install Dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### Configure Environment
@@ -84,20 +144,25 @@ cp .env.example .env
 ### Run in Development Mode
 
 ```bash
-npm run start:dev
+# Start daemon in development mode
+pnpm run start:dev
+
+# Or start with TUI
+pnpm run build
+./dist/cli.js start
 ```
 
 ### Run Tests
 
 ```bash
 # Unit tests
-npm test
+pnpm test
 
 # Watch mode
-npm run test:watch
+pnpm run test:watch
 
 # Coverage
-npm run test:cov
+pnpm run test:cov
 ```
 
 ---
@@ -138,7 +203,7 @@ shopify-api.helper.ts
 **Use Prettier** for automatic formatting:
 
 ```bash
-npm run format
+pnpm run format
 ```
 
 **Prettier Configuration** (`.prettierrc`):
@@ -158,7 +223,7 @@ npm run format
 **Run linter** before committing:
 
 ```bash
-npm run lint
+pnpm run lint
 ```
 
 **Key rules:**
@@ -366,32 +431,36 @@ Closes #42"
 
 ### Before Submitting
 
-1. **Update your branch:**
+1. **Update your branch with latest develop:**
 
 ```bash
 git fetch upstream
-git rebase upstream/main
+git rebase upstream/develop
 ```
+
+> **Note:** Always rebase against `develop`, not `main`
 
 2. **Run all tests:**
 
 ```bash
-npm test
-npm run test:cov
-npm run lint
+pnpm test
+pnpm run test:cov
+pnpm run lint
+pnpm run build  # Verify TypeScript compilation
 ```
 
 3. **Update documentation:**
 
 - Update README.md if adding features
-- Add JSDoc comments for new functions
+- Add JSDoc comments for new public functions/classes
 - Update CHANGELOG.md
 
 4. **Test locally:**
 
 ```bash
-npm run build
-npm run start:prod
+pnpm run build
+./dist/cli.js start  # Test TUI
+./dist/cli.js --help  # Test CLI commands
 ```
 
 ### PR Title

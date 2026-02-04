@@ -513,7 +513,7 @@ socket.emit('status', {}, (response) => {
 │  Step 2: Daemon Startup                                      │
 └─────────────────────────────────────────────────────────────┘
                          │
-   User runs: npm start:prod
+   User runs: pnpm start:prod
                          │
                          ▼
    NestJS bootstrap → Load modules
