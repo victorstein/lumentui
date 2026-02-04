@@ -3,12 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - main
-      - develop
+      - main # Only run on main pushes (for releases)
   pull_request:
     branches:
       - main
-      - develop
+      - develop # Run on all PRs targeting main or develop
 
 jobs:
   test:

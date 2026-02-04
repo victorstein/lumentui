@@ -135,6 +135,43 @@ private static getDirname(): string {
   ```
 - Follow beads workflow for commits (see below)
 
+#### Commit Size and Focus
+
+**CRITICAL: Make small, focused commits.** Large PRs with many commits create excessive squash messages.
+
+**Each commit should:**
+
+- Address a single, logical change
+- Have a clear, concise message (50 chars max for subject)
+- Be independently reviewable
+- Build and pass tests
+
+**Examples:**
+
+✅ **Good (focused commits):**
+
+```bash
+git commit -m "docs: update README install instructions"
+git commit -m "fix: handle null case in product filter"
+git commit -m "test: add coverage for auth service"
+```
+
+❌ **Bad (bundled commits):**
+
+```bash
+git commit -m "docs: update README, fix typos, add examples, update contributing guide"
+git commit -m "fix: multiple bug fixes and improvements"
+```
+
+**When working on a task:**
+
+1. Complete one logical piece of work
+2. Commit that piece
+3. Move to next piece
+4. **Don't bundle** unrelated changes (docs + code + tests) in one commit
+
+**Atomic commits = easier review + cleaner squash messages**
+
 ### Git Flow Branching Strategy
 
 LumenTUI uses a **Git Flow** workflow with two primary branches:
