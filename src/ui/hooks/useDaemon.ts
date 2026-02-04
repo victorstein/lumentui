@@ -3,9 +3,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { useState, useEffect, useCallback } from 'react';
 import * as ipcModule from 'node-ipc';
-import { PathsUtil } from '../../common/utils/paths.util';
+import { PathsUtil } from '../../common/utils/paths.util.js';
 
 const ipc = (ipcModule as any).default || ipcModule;
+
+const MAX_LOG_BUFFER = 100;
 
 /**
  * Product data structure from daemon (matches ProductDto)
@@ -162,7 +164,7 @@ export const useDaemon = () => {
       client.on('log', (data: LogEntry) => {
         setState((prev) => ({
           ...prev,
-          logs: [...prev.logs.slice(-9), data], // Keep last 10 logs
+          logs: [...prev.logs.slice(-(MAX_LOG_BUFFER - 1)), data],
         }));
       });
 

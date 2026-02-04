@@ -226,12 +226,12 @@ describe('useDaemon', () => {
     expect(result.current.logs[0]).toEqual(logEntry);
   });
 
-  it('should keep only last 10 logs', () => {
+  it('should keep only last 100 logs', () => {
     const { result } = renderHook(() => useDaemon());
 
-    // Add 15 logs
+    // Add 110 logs
     act(() => {
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 110; i++) {
         mockEventHandlers['log']({
           level: 'info',
           message: `Log ${i}`,
@@ -240,10 +240,10 @@ describe('useDaemon', () => {
       }
     });
 
-    // Should only keep last 10
-    expect(result.current.logs).toHaveLength(10);
-    expect(result.current.logs[0].message).toBe('Log 5');
-    expect(result.current.logs[9].message).toBe('Log 14');
+    // Should only keep last 100
+    expect(result.current.logs).toHaveLength(100);
+    expect(result.current.logs[0].message).toBe('Log 10');
+    expect(result.current.logs[99].message).toBe('Log 109');
   });
 
   it('should emit force-poll event', () => {

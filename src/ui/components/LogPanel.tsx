@@ -3,6 +3,8 @@ import { Box, Text, Static } from 'ink';
 import { theme } from '../theme.js';
 import { LogEntry } from '../hooks/useDaemon.js';
 
+const MAX_LOG_BUFFER = 100;
+
 interface LogPanelProps {
   logs: LogEntry[];
 }
@@ -65,21 +67,33 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
       </Box>
 
       {/* Logs */}
-      <Box flexDirection="column" paddingX={1} flexGrow={1} overflow="hidden">
+      <Box flexDirection="column" paddingX={1} flexGrow={1}>
         {logs.length === 0 ? (
           <Text color={theme.colors.textMuted}>No logs yet...</Text>
         ) : (
-          logs.map((log, index) => (
-            <Box key={index} flexShrink={0}>
-              <Text color={theme.colors.textMuted}>
-                {formatTime(log.timestamp)}{' '}
-              </Text>
-              <Text color={getLogColor(log.level)}>
-                {getLogSymbol(log.level)}{' '}
-              </Text>
-              <Text wrap="truncate">{log.message}</Text>
-            </Box>
-          ))
+          <>
+            <Static items={logs}>
+              {(log, index) => (
+                <Box key={index} flexShrink={0}>
+                  <Text color={theme.colors.textMuted}>
+                    {formatTime(log.timestamp)}{' '}
+                  </Text>
+                  <Text color={getLogColor(log.level)}>
+                    {getLogSymbol(log.level)}{' '}
+                  </Text>
+                  <Text wrap="truncate">{log.message}</Text>
+                </Box>
+              )}
+            </Static>
+            {logs.length >= MAX_LOG_BUFFER && (
+              <Box paddingTop={1}>
+                <Text color={theme.colors.textMuted} italic>
+                  {theme.symbols.info} Buffer full ({MAX_LOG_BUFFER} entries) -
+                  older logs cleared
+                </Text>
+              </Box>
+            )}
+          </>
         )}
       </Box>
     </Box>
