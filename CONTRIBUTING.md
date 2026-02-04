@@ -411,19 +411,70 @@ Closes #42"
 
 ### Commit Best Practices
 
+**IMPORTANT: Make small, focused commits.** When PRs have many large commits, squashing creates excessive commit messages that are difficult to manage.
+
+#### Commit Size Guidelines
+
+**Each commit should:**
+
+- Address a **single, logical change**
+- Have a clear, concise subject line (max 50 characters)
+- Be independently reviewable
+- Build and pass all tests
+
+**Think atomic:** One commit = one unit of work
+
+✅ **Good (focused commits):**
+
+```bash
+git commit -m "docs: update README install instructions"
+git commit -m "fix: handle null case in product filter"
+git commit -m "test: add coverage for auth service"
+git commit -m "refactor: extract validation logic to helper"
+```
+
+❌ **Bad (bundled commits):**
+
+```bash
+git commit -m "docs: update README, fix typos, add examples, update contributing guide"
+git commit -m "fix: multiple bug fixes and improvements"
+git commit -m "feat: add feature + tests + docs + refactoring"
+```
+
+#### General Best Practices
+
 ✅ **Do:**
 
 - Write clear, descriptive commit messages
-- Keep commits focused (one logical change)
-- Reference issues in commit messages
+- **Keep commits focused** (one logical change per commit)
+- Reference issues in commit messages (`Closes #42`)
 - Use present tense ("add feature" not "added feature")
+- Separate concerns: code changes, tests, and docs can be separate commits
 
 ❌ **Don't:**
 
 - Commit commented-out code
-- Commit unrelated changes together
+- **Bundle unrelated changes** (docs + code + tests) in one commit
 - Use vague messages ("fix stuff", "update code")
 - Commit secrets or sensitive data
+- Create commits with multiple unrelated file changes
+
+#### Why Small Commits Matter
+
+When maintainers squash your PR, all commit messages combine into one. Large commits with many changes create unwieldy squash messages:
+
+```bash
+# ❌ Bad: One large commit = one large squash message
+feat: add notification system, update docs, refactor auth, add tests
+
+# ✅ Good: Multiple small commits = clean squash
+feat: add notification service
+feat: add notification rate limiting
+test: add notification service tests
+docs: document notification configuration
+```
+
+**Atomic commits = easier review + cleaner history + better squash messages**
 
 ---
 
