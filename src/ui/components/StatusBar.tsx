@@ -9,6 +9,7 @@ interface StatusBarProps {
   availableCount: number;
   viewMode: 'list' | 'detail';
   polling: boolean;
+  appView?: 'main' | 'history';
 }
 
 /**
@@ -20,6 +21,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   availableCount,
   viewMode,
   polling,
+  appView = 'main',
 }) => {
   const getNextPollTime = () => {
     if (!lastHeartbeat) return 'N/A';
@@ -84,6 +86,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         <Text color={theme.colors.textMuted}>
           <Text color={theme.colors.accent}>f</Text> poll
         </Text>
+        {appView === 'main' && (
+          <Text color={theme.colors.textMuted}>
+            <Text color={theme.colors.accent}>h</Text> history
+          </Text>
+        )}
         <Text color={theme.colors.textMuted}>
           <Text color={theme.colors.accent}>esc</Text> back
         </Text>

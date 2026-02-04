@@ -540,4 +540,94 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       return [];
     }
   }
+
+  /**
+   * Prune old notification history records
+   * Deletes notifications older than 30 days OR keeps only the most recent 100 records
+   * Records cleanup operation in notification_history_metadata table
+   * @returns Number of records deleted
+   */
+  pruneNotificationHistory(): number {
+    try {
+      this.db.run('BEGIN');
+
+      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+      const totalCountResult = this.queryOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM notifications',
+      );
+      const totalCount = totalCountResult?.count || 0;
+
+      let recordsDeleted = 0;
+
+      if (totalCount > 100) {
+        const keepCount = 100;
+        const deleteByAgeResult = this.queryOne<{ count: number }>(
+          'SELECT COUNT(*) as count FROM notifications WHERE timestamp < ?',
+          [thirtyDaysAgo],
+        );
+        const deleteByAge = deleteByAgeResult?.count || 0;
+        const deleteByLimit = totalCount - keepCount;
+
+        if (deleteByLimit > deleteByAge) {
+          this.execute(
+            `
+              DELETE FROM notifications
+              WHERE id IN (
+                SELECT id FROM notifications
+                ORDER BY timestamp DESC
+                LIMIT -1 OFFSET ?
+              )
+            `,
+            [keepCount],
+          );
+          recordsDeleted = deleteByLimit;
+        } else {
+          this.execute('DELETE FROM notifications WHERE timestamp < ?', [
+            thirtyDaysAgo,
+          ]);
+          recordsDeleted = deleteByAge;
+        }
+      } else {
+        this.execute('DELETE FROM notifications WHERE timestamp < ?', [
+          thirtyDaysAgo,
+        ]);
+        const deleteResult = this.queryOne<{ count: number }>(
+          'SELECT changes() as count',
+        );
+        recordsDeleted = deleteResult?.count || 0;
+      }
+
+      const now = new Date().toISOString();
+      this.execute(
+        `
+          INSERT INTO notification_history_metadata (
+            last_cleanup_timestamp, records_deleted, created_at
+          )
+          VALUES (?, ?, ?)
+        `,
+        [now, recordsDeleted, now],
+      );
+
+      this.db.run('COMMIT');
+
+      this.persist();
+
+      this.logger.log(
+        `Pruned ${recordsDeleted} notification records`,
+        'DatabaseService',
+      );
+
+      return recordsDeleted;
+    } catch (error: unknown) {
+      this.db.run('ROLLBACK');
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to prune notification history: ${errorMessage}`,
+        'DatabaseService',
+      );
+      return 0;
+    }
+  }
 }

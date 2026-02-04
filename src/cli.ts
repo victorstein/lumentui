@@ -118,6 +118,72 @@ class CliValidator {
   }
 
   /**
+   * Validate positive integer
+   * @param value String value to validate
+   * @param name Field name for error messages
+   */
+  static validatePositiveInteger(
+    value: string | undefined,
+    name: string,
+  ): { valid: boolean; error?: string } {
+    if (!value) {
+      return {
+        valid: false,
+        error: `${name} is required`,
+      };
+    }
+
+    const num = parseInt(value, 10);
+    if (isNaN(num)) {
+      return {
+        valid: false,
+        error: `${name} must be a valid number (got: "${value}")`,
+      };
+    }
+
+    if (num < 1) {
+      return {
+        valid: false,
+        error: `${name} must be a positive integer (got: ${num})`,
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate enum value
+   * @param value String value to validate
+   * @param name Field name for error messages
+   * @param allowedValues Array of allowed values
+   * @param caseSensitive Whether comparison is case-sensitive (default: true)
+   */
+  static validateEnum(
+    value: string | undefined,
+    name: string,
+    allowedValues: string[],
+    caseSensitive: boolean = true,
+  ): { valid: boolean; error?: string } {
+    if (!value) {
+      return { valid: true }; // Optional field
+    }
+
+    const compareValue = caseSensitive ? value : value.toLowerCase();
+    const compareAllowed = caseSensitive
+      ? allowedValues
+      : allowedValues.map((v) => v.toLowerCase());
+
+    if (!compareAllowed.includes(compareValue)) {
+      return {
+        valid: false,
+        error: `${name} must be one of: ${allowedValues.join(', ')} (got: "${value}")`,
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
    * Validate configuration from environment variables
    */
   static validateEnvironment(): { valid: boolean; errors: string[] } {
@@ -922,5 +988,223 @@ configCommand
       process.exit(1);
     }
   });
+
+/**
+ * Utility class for formatting CLI output tables
+ */
+class TableFormatter {
+  /**
+   * Truncate text to max length with ellipsis
+   */
+  static truncate(text: string, maxLength: number): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return text.substring(0, maxLength - 3) + '...';
+  }
+
+  /**
+   * Format notification history for display
+   */
+  static formatHistoryTable(
+    history: import('./common/utils/ipc-client.util').FormattedNotification[],
+  ): Array<Record<string, string>> {
+    return history.map((n) => ({
+      Time: n.formattedTimestamp,
+      Product: this.truncate(n.productTitle || n.productId, 40),
+      Status: n.status === 'sent' ? '✓ sent' : '✗ failed',
+      Change: this.truncate(n.availabilityChange || '-', 25),
+    }));
+  }
+
+  /**
+   * Format notification statistics for display
+   */
+  static formatStatsTable(
+    stats: import('./common/utils/ipc-client.util').NotificationStats['countByProduct'],
+  ): Array<Record<string, string | number>> {
+    return stats.map((p) => ({
+      Product: this.truncate(p.productTitle || p.productId, 45),
+      Sent: p.sentCount,
+      Failed: p.failedCount,
+      Total: p.totalCount,
+      'Success %':
+        p.totalCount > 0
+          ? ((p.sentCount / p.totalCount) * 100).toFixed(1) + '%'
+          : '0%',
+    }));
+  }
+}
+
+/**
+ * Command: lumentui history
+ * View notification history with filtering options
+ */
+program
+  .command('history')
+  .description('View notification history')
+  .option('--product <id>', 'Filter by product ID')
+  .option('--status <status>', 'Filter by notification status (sent|failed)')
+  .option('--days <number>', 'Show history from last N days', '30')
+  .option('--limit <number>', 'Maximum records to show', '50')
+  .option('--stats', 'Show statistics instead of history list')
+  .action(
+    async (options: {
+      product?: string;
+      status?: string;
+      days: string;
+      limit: string;
+      stats?: boolean;
+    }) => {
+      try {
+        // Validate options
+        const daysValidation = CliValidator.validatePositiveInteger(
+          options.days,
+          '--days',
+        );
+        if (!daysValidation.valid) {
+          console.error(`❌ ${daysValidation.error}`);
+          process.exit(1);
+        }
+
+        const limitValidation = CliValidator.validateNumeric(
+          options.limit,
+          '--limit',
+          1,
+          1000,
+        );
+        if (!limitValidation.valid) {
+          console.error(`❌ ${limitValidation.error}`);
+          process.exit(1);
+        }
+
+        const statusValidation = CliValidator.validateEnum(
+          options.status,
+          '--status',
+          ['sent', 'failed'],
+          true,
+        );
+        if (!statusValidation.valid) {
+          console.error(`❌ ${statusValidation.error}`);
+          process.exit(1);
+        }
+
+        const status = PidManager.getDaemonStatus();
+
+        if (!status.isRunning) {
+          console.error('❌ Daemon is not running');
+          console.error('Start the daemon first: lumentui start');
+          process.exit(1);
+        }
+
+        const reachable = await IpcClient.isDaemonReachable();
+        if (!reachable) {
+          console.error('❌ Cannot connect to daemon');
+          console.error('The daemon is running but not responding via IPC.');
+          process.exit(1);
+        }
+
+        if (options.stats) {
+          const result = await IpcClient.getNotificationStats();
+
+          if (!result.success) {
+            console.error('❌ Failed to get notification statistics');
+            if (result.error) {
+              console.error(`Error: ${result.error}`);
+            }
+            process.exit(1);
+          }
+
+          const { stats } = result;
+
+          console.log('\n Notification Statistics\n');
+          console.log(''.padEnd(80, '='));
+          console.log(`\nTotal Sent:   ${stats.totalSent}`);
+          console.log(`Total Failed: ${stats.totalFailed}`);
+          console.log(
+            `Success Rate: ${stats.totalSent + stats.totalFailed > 0 ? ((stats.totalSent / (stats.totalFailed + stats.totalSent)) * 100).toFixed(1) : 0}%`,
+          );
+
+          if (stats.countByProduct.length > 0) {
+            console.log('\n By Product:\n');
+            console.table(
+              TableFormatter.formatStatsTable(stats.countByProduct),
+            );
+          } else {
+            console.log('\nNo notification history found.');
+          }
+
+          console.log(''.padEnd(80, '=') + '\n');
+        } else {
+          const filters: import('./common/utils/ipc-client.util').NotificationHistoryFilters =
+            {
+              limit: parseInt(options.limit, 10),
+            };
+
+          if (options.status) {
+            filters.status = options.status as 'sent' | 'failed';
+          }
+
+          if (options.product) {
+            filters.productId = options.product;
+          }
+
+          const days = parseInt(options.days, 10);
+          const dateFrom = new Date();
+          dateFrom.setDate(dateFrom.getDate() - days);
+          filters.dateFrom = dateFrom.toISOString();
+
+          const result = await IpcClient.getNotificationHistory(filters);
+
+          if (!result.success) {
+            console.error('❌ Failed to get notification history');
+            if (result.error) {
+              console.error(`Error: ${result.error}`);
+            }
+            process.exit(1);
+          }
+
+          const { history, count } = result;
+
+          if (history.length === 0) {
+            console.log('\nNo notification history found.');
+            console.log(`Filters: Last ${days} days`);
+            if (options.product) {
+              console.log(`  Product ID: ${options.product}`);
+            }
+            if (options.status) {
+              console.log(`  Status: ${options.status}`);
+            }
+            process.exit(0);
+          }
+
+          console.log(
+            `\n Notification History (${history.length} of ${count} total)\n`,
+          );
+          console.log(''.padEnd(80, '='));
+
+          console.table(TableFormatter.formatHistoryTable(history));
+
+          console.log(''.padEnd(80, '='));
+          console.log(`\nShowing ${history.length} of ${count} total records`);
+          console.log(`Filters: Last ${days} days`);
+          if (options.product) {
+            console.log(`  Product ID: ${options.product}`);
+          }
+          if (options.status) {
+            console.log(`  Status: ${options.status}`);
+          }
+          console.log('');
+        }
+
+        process.exit(0);
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        console.error('❌ Failed to get notification history:', errorMessage);
+        process.exit(1);
+      }
+    },
+  );
 
 program.parse();

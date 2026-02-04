@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Box, Text, useInput, useApp, useStdout } from 'ink';
 import { useDaemon } from './hooks/useDaemon.js';
 import { useProducts } from './hooks/useProducts.js';
@@ -8,7 +8,10 @@ import { ProductDetail } from './components/ProductDetail.js';
 import { LogPanel } from './components/LogPanel.js';
 import { StatusBar } from './components/StatusBar.js';
 import { NotificationBanner } from './components/NotificationBanner.js';
+import { HistoryView } from './components/HistoryView.js';
 import { theme } from './theme.js';
+
+type AppView = 'main' | 'history';
 
 /**
  * Main TUI Application Component
@@ -18,6 +21,8 @@ const App: React.FC = () => {
   const { stdout } = useStdout();
   const terminalHeight = stdout?.rows ?? 24;
   const terminalWidth = stdout?.columns ?? 80;
+
+  const [appView, setAppView] = useState<AppView>('main');
 
   // Connect to daemon via IPC
   const {
@@ -47,13 +52,21 @@ const App: React.FC = () => {
 
   // Keyboard input handling
   useInput((input, key) => {
-    // Escape: back to list from detail, or quit from list
+    // Handle escape key based on current view
     if (key.escape) {
-      if (viewMode === 'detail') {
+      if (appView === 'history') {
+        setAppView('main');
+      } else if (viewMode === 'detail') {
         switchView('list');
       } else {
         exit();
       }
+      return;
+    }
+
+    // Handle 'b' key to go back from history view
+    if (input === 'b' && appView === 'history') {
+      setAppView('main');
       return;
     }
 
@@ -63,30 +76,39 @@ const App: React.FC = () => {
       return;
     }
 
-    // Navigation
-    if (key.upArrow || input === 'k') {
-      selectPrevious();
-    } else if (key.downArrow || input === 'j') {
-      selectNext();
+    // Open history view (only from main view)
+    if (input === 'h' && appView === 'main') {
+      setAppView('history');
+      return;
     }
 
-    // Toggle view
-    if (key.return || input === ' ') {
-      if (viewMode === 'list' && selectedProduct) {
-        switchView('detail');
-      } else if (viewMode === 'detail') {
-        switchView('list');
+    // Only handle main view navigation when in main view
+    if (appView === 'main') {
+      // Navigation
+      if (key.upArrow || input === 'k') {
+        selectPrevious();
+      } else if (key.downArrow || input === 'j') {
+        selectNext();
       }
-    }
 
-    // Force poll
-    if (input === 'f') {
-      forcePoll();
-    }
+      // Toggle view
+      if (key.return || input === ' ') {
+        if (viewMode === 'list' && selectedProduct) {
+          switchView('detail');
+        } else if (viewMode === 'detail') {
+          switchView('list');
+        }
+      }
 
-    // Clear error
-    if (input === 'c' && error) {
-      clearError();
+      // Force poll
+      if (input === 'f') {
+        forcePoll();
+      }
+
+      // Clear error
+      if (input === 'c' && error) {
+        clearError();
+      }
     }
   });
 
@@ -160,47 +182,55 @@ const App: React.FC = () => {
 
       {connected && (
         <>
-          {/* Main content area */}
-          <Box
-            flexDirection={terminalWidth >= 100 ? 'row' : 'column'}
-            flexGrow={1}
-          >
-            {/* Product list or detail */}
-            <Box flexGrow={1} marginRight={terminalWidth >= 100 ? 1 : 0}>
-              {viewMode === 'list' || !selectedProduct ? (
-                <ProductList
-                  products={filteredProducts}
-                  selectedIndex={selectedIndex}
-                  totalProducts={stats.total}
-                  availableProducts={stats.available}
-                />
-              ) : (
-                <ProductDetail product={selectedProduct} />
-              )}
-            </Box>
-
-            {/* Log panel — side column on wide, bottom section on narrow, hidden on tiny */}
-            {terminalWidth >= 60 && (
+          {/* Render different views based on appView state */}
+          {appView === 'history' ? (
+            <HistoryView />
+          ) : (
+            <>
+              {/* Main content area */}
               <Box
-                width={terminalWidth >= 100 ? '40%' : '100%'}
-                height={terminalWidth >= 100 ? undefined : 8}
-                flexDirection="column"
-                flexGrow={terminalWidth >= 100 ? 1 : 0}
-                flexShrink={0}
+                flexDirection={terminalWidth >= 100 ? 'row' : 'column'}
+                flexGrow={1}
               >
-                <LogPanel logs={logs} />
-              </Box>
-            )}
-          </Box>
+                {/* Product list or detail */}
+                <Box flexGrow={1} marginRight={terminalWidth >= 100 ? 1 : 0}>
+                  {viewMode === 'list' || !selectedProduct ? (
+                    <ProductList
+                      products={filteredProducts}
+                      selectedIndex={selectedIndex}
+                      totalProducts={stats.total}
+                      availableProducts={stats.available}
+                    />
+                  ) : (
+                    <ProductDetail product={selectedProduct} />
+                  )}
+                </Box>
 
-          {/* Bottom status bar */}
-          <StatusBar
-            lastHeartbeat={lastHeartbeat}
-            productCount={stats.total}
-            availableCount={stats.available}
-            viewMode={viewMode}
-            polling={polling}
-          />
+                {/* Log panel — side column on wide, bottom section on narrow, hidden on tiny */}
+                {terminalWidth >= 60 && (
+                  <Box
+                    width={terminalWidth >= 100 ? '40%' : '100%'}
+                    height={terminalWidth >= 100 ? undefined : 8}
+                    flexDirection="column"
+                    flexGrow={terminalWidth >= 100 ? 1 : 0}
+                    flexShrink={0}
+                  >
+                    <LogPanel logs={logs} />
+                  </Box>
+                )}
+              </Box>
+
+              {/* Bottom status bar */}
+              <StatusBar
+                lastHeartbeat={lastHeartbeat}
+                productCount={stats.total}
+                availableCount={stats.available}
+                viewMode={viewMode}
+                polling={polling}
+                appView={appView}
+              />
+            </>
+          )}
         </>
       )}
     </Box>

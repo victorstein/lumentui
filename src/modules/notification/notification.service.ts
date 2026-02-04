@@ -58,8 +58,11 @@ export class NotificationService implements OnModuleInit {
       // Update rate limit cache
       this.notificationCache.set(product.id, Date.now());
 
-      // Record notification in database
-      this.recordNotification(product.id, true);
+      // Record notification in database with metadata
+      this.recordNotification(product.id, true, {
+        productTitle: product.title,
+        availabilityChange: this.describeAvailabilityChange(product),
+      });
 
       this.logger.log(
         `Notification sent successfully for product: ${product.title}`,
@@ -75,8 +78,12 @@ export class NotificationService implements OnModuleInit {
         'NotificationService',
       );
 
-      // Record failed notification
-      this.recordNotification(product.id, false);
+      // Record failed notification with error message
+      this.recordNotification(product.id, false, {
+        productTitle: product.title,
+        availabilityChange: this.describeAvailabilityChange(product),
+        errorMessage,
+      });
 
       return false;
     }
@@ -103,6 +110,21 @@ export class NotificationService implements OnModuleInit {
     lines.push(`${product.url}`);
 
     return lines.join('\n');
+  }
+
+  /**
+   * Describe the availability change for a product
+   */
+  private describeAvailabilityChange(product: ProductDto): string {
+    const availableVariants = product.variants.filter((v) => v.available);
+
+    if (product.available && availableVariants.length > 0) {
+      return `became available (${availableVariants.length} variant(s))`;
+    } else if (product.available) {
+      return 'became available';
+    } else {
+      return 'sold out';
+    }
   }
 
   /**
@@ -142,17 +164,127 @@ export class NotificationService implements OnModuleInit {
   /**
    * Record notification in database
    */
-  private recordNotification(productId: string, sent: boolean): void {
-    // Use DatabaseService method instead of raw db access
-    this.databaseService.recordNotification(productId, sent);
+  private recordNotification(
+    productId: string,
+    sent: boolean,
+    options?: {
+      productTitle?: string;
+      availabilityChange?: string;
+      errorMessage?: string;
+    },
+  ): void {
+    this.databaseService.recordNotification(productId, sent, options);
   }
 
   /**
    * Get notification history for a product
    */
-
   getNotificationHistory(productId: string, limit: number = 10): any[] {
     return this.databaseService.getNotificationHistory({ productId, limit });
+  }
+
+  /**
+   * Get formatted notification history with filters
+   * Transforms raw database entities into easily consumable format for CLI/TUI
+   */
+  getFormattedHistory(filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    productId?: string;
+    status?: 'sent' | 'failed';
+    limit?: number;
+    offset?: number;
+  }): Array<{
+    id: number;
+    productId: string;
+    productTitle: string | null;
+    timestamp: number;
+    formattedTimestamp: string;
+    status: 'sent' | 'failed';
+    availabilityChange: string | null;
+    errorMessage: string | null;
+  }> {
+    try {
+      const rawHistory = this.databaseService.getNotificationHistory(filters);
+
+      return rawHistory.map((notification) => ({
+        id: notification.id || 0,
+        productId: notification.product_id,
+        productTitle: notification.product_title || null,
+        timestamp: notification.timestamp,
+        formattedTimestamp: this.formatTimestamp(notification.timestamp),
+        status: notification.sent === 1 ? 'sent' : 'failed',
+        availabilityChange: notification.availability_change || null,
+        errorMessage: notification.error_message || null,
+      }));
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to get formatted notification history: ${errorMessage}`,
+        'NotificationService',
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Get notification statistics
+   */
+  getNotificationStats(): {
+    totalSent: number;
+    totalFailed: number;
+    countByProduct: Array<{
+      productId: string;
+      productTitle: string | null;
+      sentCount: number;
+      failedCount: number;
+      totalCount: number;
+    }>;
+  } {
+    try {
+      const stats = this.databaseService.getNotificationStats();
+
+      return {
+        totalSent: stats.totalSent,
+        totalFailed: stats.totalFailed,
+        countByProduct: stats.countByProduct.map((item) => ({
+          productId: item.product_id,
+          productTitle: item.product_title,
+          sentCount: item.sent_count,
+          failedCount: item.failed_count,
+          totalCount: item.sent_count + item.failed_count,
+        })),
+      };
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to get notification stats: ${errorMessage}`,
+        'NotificationService',
+      );
+      return {
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      };
+    }
+  }
+
+  /**
+   * Format timestamp to human-readable string
+   */
+  private formatTimestamp(timestamp: number): string {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
   }
 
   /**

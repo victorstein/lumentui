@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { useState, useEffect, useCallback } from 'react';
 import * as ipcModule from 'node-ipc';
+import { PathsUtil } from '../../common/utils/paths.util';
 
 const ipc = (ipcModule as any).default || ipcModule;
 
@@ -71,7 +72,7 @@ export const useDaemon = () => {
     polling: false,
   });
 
-  const socketPath = '/tmp/lumentui.sock';
+  const socketPath = PathsUtil.getIpcSocketPath();
 
   useEffect(() => {
     // Configure IPC client

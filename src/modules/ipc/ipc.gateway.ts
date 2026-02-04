@@ -15,6 +15,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { ProductDto } from '../api/dto/product.dto';
 import { PathsUtil } from '../../common/utils/paths.util';
+import { NotificationService } from '../notification/notification.service';
 
 const execAsync = promisify(exec);
 
@@ -29,7 +30,10 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   private isServerRunning = false;
   private schedulerService: any;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
+  ) {
     this.socketPath = this.configService.get<string>(
       'IPC_SOCKET_PATH',
       PathsUtil.getIpcSocketPath(),
@@ -255,10 +259,153 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       }
     });
 
+    // Listen for getNotificationHistory event from client
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on(
+      'getNotificationHistory',
+      (data: unknown, socket: unknown) => {
+        this.logger.log('Notification history requested by client');
+
+        try {
+          // Parse and validate filters
+          const filters = this.parseNotificationFilters(data);
+
+          // Get formatted history from NotificationService
+          const history = this.notificationService.getFormattedHistory(filters);
+
+          // Emit result back to client
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          ipc.server.emit(socket, 'getNotificationHistory-result', {
+            success: true,
+            history,
+            count: history.length,
+            timestamp: Date.now(),
+          });
+
+          this.logger.log(
+            `Notification history sent: ${history.length} entries`,
+          );
+        } catch (error: unknown) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error';
+          const errorStack = error instanceof Error ? error.stack : undefined;
+          this.logger.error(
+            `Failed to get notification history: ${errorMessage}`,
+            errorStack,
+          );
+
+          // Emit error back to client
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          ipc.server.emit(socket, 'getNotificationHistory-result', {
+            success: false,
+            history: [],
+            count: 0,
+            error: errorMessage,
+            timestamp: Date.now(),
+          });
+        }
+      },
+    );
+
+    // Listen for getNotificationStats event from client
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on('getNotificationStats', (_data: unknown, socket: unknown) => {
+      this.logger.log('Notification stats requested by client');
+
+      try {
+        // Get statistics from NotificationService
+        const stats = this.notificationService.getNotificationStats();
+
+        // Emit result back to client
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        ipc.server.emit(socket, 'getNotificationStats-result', {
+          success: true,
+          stats,
+          timestamp: Date.now(),
+        });
+
+        this.logger.log(
+          `Notification stats sent: ${stats.totalSent} sent, ${stats.totalFailed} failed`,
+        );
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        this.logger.error(
+          `Failed to get notification stats: ${errorMessage}`,
+          errorStack,
+        );
+
+        // Emit error back to client
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        ipc.server.emit(socket, 'getNotificationStats-result', {
+          success: false,
+          stats: {
+            totalSent: 0,
+            totalFailed: 0,
+            countByProduct: [],
+          },
+          error: errorMessage,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.on('error', (error: Error) => {
       this.logger.error(`IPC server error: ${error.message}`, error.stack);
     });
+  }
+
+  /**
+   * Parse and validate notification history filters from IPC data
+   */
+  private parseNotificationFilters(data: unknown): {
+    dateFrom?: string;
+    dateTo?: string;
+    productId?: string;
+    status?: 'sent' | 'failed';
+    limit?: number;
+    offset?: number;
+  } {
+    const filters: {
+      dateFrom?: string;
+      dateTo?: string;
+      productId?: string;
+      status?: 'sent' | 'failed';
+      limit?: number;
+      offset?: number;
+    } = {};
+
+    if (typeof data === 'object' && data !== null) {
+      const rawData = data as Record<string, unknown>;
+
+      if (typeof rawData.dateFrom === 'string') {
+        filters.dateFrom = rawData.dateFrom;
+      }
+
+      if (typeof rawData.dateTo === 'string') {
+        filters.dateTo = rawData.dateTo;
+      }
+
+      if (typeof rawData.productId === 'string') {
+        filters.productId = rawData.productId;
+      }
+
+      if (rawData.status === 'sent' || rawData.status === 'failed') {
+        filters.status = rawData.status;
+      }
+
+      if (typeof rawData.limit === 'number' && rawData.limit > 0) {
+        filters.limit = rawData.limit;
+      }
+
+      if (typeof rawData.offset === 'number' && rawData.offset >= 0) {
+        filters.offset = rawData.offset;
+      }
+    }
+
+    return filters;
   }
 
   /**

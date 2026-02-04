@@ -106,6 +106,11 @@ describe('NotificationService', () => {
       recordNotification: jest.fn(),
       getNotificationHistory: jest.fn().mockReturnValue([]),
       getRecentNotifications: jest.fn().mockReturnValue([]),
+      getNotificationStats: jest.fn().mockReturnValue({
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -255,10 +260,15 @@ describe('NotificationService', () => {
       expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
         mockProduct.id,
         false,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.any(String),
+          errorMessage: expect.any(String),
+        }),
       );
     });
 
-    it('should record successful notification in database', async () => {
+    it('should record successful notification in database with metadata', async () => {
       execFileSuccess();
 
       await service.sendAvailabilityNotification(mockProduct);
@@ -266,6 +276,68 @@ describe('NotificationService', () => {
       expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
         mockProduct.id,
         true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.any(String),
+        }),
+      );
+    });
+
+    it('should include availability change description with variant count', async () => {
+      execFileSuccess();
+
+      await service.sendAvailabilityNotification(mockProduct);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'became available (2 variant(s))',
+        }),
+      );
+    });
+
+    it('should describe availability change for product without variants', async () => {
+      execFileSuccess();
+
+      const productNoVariants: ProductDto = {
+        ...mockProduct,
+        variants: [],
+      };
+
+      await service.sendAvailabilityNotification(productNoVariants);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        productNoVariants.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'became available',
+        }),
+      );
+    });
+
+    it('should describe sold out for unavailable product', async () => {
+      execFileSuccess();
+
+      const unavailableProduct: ProductDto = {
+        ...mockProduct,
+        available: false,
+        variants: [
+          {
+            ...mockProduct.variants[0],
+            available: false,
+          },
+        ],
+      };
+
+      await service.sendAvailabilityNotification(unavailableProduct);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        unavailableProduct.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'sold out',
+        }),
       );
     });
   });
@@ -607,6 +679,324 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('getFormattedHistory', () => {
+    it('should format notification history correctly', () => {
+      const mockRawHistory = [
+        {
+          id: 1,
+          product_id: 'prod-123',
+          product_title: 'Gaming Mouse',
+          timestamp: 1704067200000,
+          sent: 1,
+          availability_change: 'became available (2 variant(s))',
+          error_message: null,
+        },
+        {
+          id: 2,
+          product_id: 'prod-456',
+          product_title: 'Keyboard',
+          timestamp: 1704153600000,
+          sent: 0,
+          availability_change: 'became available',
+          error_message: 'osascript failed',
+        },
+      ];
+
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockRawHistory,
+      );
+
+      const result = service.getFormattedHistory();
+
+      expect(result).toHaveLength(2);
+
+      expect(result[0]).toMatchObject({
+        id: 1,
+        productId: 'prod-123',
+        productTitle: 'Gaming Mouse',
+        timestamp: 1704067200000,
+        status: 'sent',
+        availabilityChange: 'became available (2 variant(s))',
+        errorMessage: null,
+      });
+
+      expect(result[0].formattedTimestamp).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+
+      expect(result[1]).toMatchObject({
+        id: 2,
+        productId: 'prod-456',
+        productTitle: 'Keyboard',
+        timestamp: 1704153600000,
+        status: 'failed',
+        availabilityChange: 'became available',
+        errorMessage: 'osascript failed',
+      });
+    });
+
+    it('should pass filters to database service', () => {
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        [],
+      );
+
+      const filters = {
+        dateFrom: '2024-01-01',
+        dateTo: '2024-01-31',
+        productId: 'prod-123',
+        status: 'sent' as const,
+        limit: 50,
+        offset: 10,
+      };
+
+      service.getFormattedHistory(filters);
+
+      expect(mockDatabaseService.getNotificationHistory).toHaveBeenCalledWith(
+        filters,
+      );
+    });
+
+    it('should handle null values in notification fields', () => {
+      const mockRawHistory = [
+        {
+          id: 1,
+          product_id: 'prod-123',
+          product_title: null,
+          timestamp: 1704067200000,
+          sent: 1,
+          availability_change: null,
+          error_message: null,
+        },
+      ];
+
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockRawHistory,
+      );
+
+      const result = service.getFormattedHistory();
+
+      expect(result[0]).toMatchObject({
+        id: 1,
+        productId: 'prod-123',
+        productTitle: null,
+        status: 'sent',
+        availabilityChange: null,
+        errorMessage: null,
+      });
+    });
+
+    it('should handle database errors gracefully', () => {
+      (
+        mockDatabaseService.getNotificationHistory as jest.Mock
+      ).mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      const result = service.getFormattedHistory();
+
+      expect(result).toEqual([]);
+      expect(mockLoggerService.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to get formatted notification history'),
+        'NotificationService',
+      );
+    });
+
+    it('should handle missing id field', () => {
+      const mockRawHistory = [
+        {
+          product_id: 'prod-123',
+          product_title: 'Test',
+          timestamp: 1704067200000,
+          sent: 1,
+          availability_change: null,
+          error_message: null,
+        },
+      ];
+
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockRawHistory,
+      );
+
+      const result = service.getFormattedHistory();
+
+      expect(result[0].id).toBe(0);
+    });
+
+    it('should format timestamps consistently', () => {
+      const mockRawHistory = [
+        {
+          id: 1,
+          product_id: 'prod-123',
+          product_title: 'Test',
+          timestamp: 1704067200000,
+          sent: 1,
+          availability_change: null,
+          error_message: null,
+        },
+      ];
+
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockRawHistory,
+      );
+
+      const result = service.getFormattedHistory();
+
+      expect(result[0].formattedTimestamp).toBeTruthy();
+      expect(typeof result[0].formattedTimestamp).toBe('string');
+    });
+  });
+
+  describe('getNotificationStats', () => {
+    it('should format notification stats correctly', () => {
+      const mockStats = {
+        totalSent: 42,
+        totalFailed: 7,
+        countByProduct: [
+          {
+            product_id: 'prod-123',
+            product_title: 'Gaming Mouse',
+            sent_count: 10,
+            failed_count: 2,
+          },
+          {
+            product_id: 'prod-456',
+            product_title: 'Keyboard',
+            sent_count: 5,
+            failed_count: 1,
+          },
+        ],
+      };
+
+      (mockDatabaseService.getNotificationStats as jest.Mock).mockReturnValue(
+        mockStats,
+      );
+
+      const result = service.getNotificationStats();
+
+      expect(result.totalSent).toBe(42);
+      expect(result.totalFailed).toBe(7);
+      expect(result.countByProduct).toHaveLength(2);
+
+      expect(result.countByProduct[0]).toMatchObject({
+        productId: 'prod-123',
+        productTitle: 'Gaming Mouse',
+        sentCount: 10,
+        failedCount: 2,
+        totalCount: 12,
+      });
+
+      expect(result.countByProduct[1]).toMatchObject({
+        productId: 'prod-456',
+        productTitle: 'Keyboard',
+        sentCount: 5,
+        failedCount: 1,
+        totalCount: 6,
+      });
+    });
+
+    it('should handle database errors gracefully', () => {
+      (
+        mockDatabaseService.getNotificationStats as jest.Mock
+      ).mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      const result = service.getNotificationStats();
+
+      expect(result).toEqual({
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      });
+      expect(mockLoggerService.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to get notification stats'),
+        'NotificationService',
+      );
+    });
+
+    it('should handle null product titles', () => {
+      const mockStats = {
+        totalSent: 10,
+        totalFailed: 2,
+        countByProduct: [
+          {
+            product_id: 'prod-123',
+            product_title: null,
+            sent_count: 8,
+            failed_count: 2,
+          },
+        ],
+      };
+
+      (mockDatabaseService.getNotificationStats as jest.Mock).mockReturnValue(
+        mockStats,
+      );
+
+      const result = service.getNotificationStats();
+
+      expect(result.countByProduct[0]).toMatchObject({
+        productId: 'prod-123',
+        productTitle: null,
+        sentCount: 8,
+        failedCount: 2,
+        totalCount: 10,
+      });
+    });
+
+    it('should calculate total counts correctly', () => {
+      const mockStats = {
+        totalSent: 100,
+        totalFailed: 50,
+        countByProduct: [
+          {
+            product_id: 'prod-123',
+            product_title: 'Product 1',
+            sent_count: 25,
+            failed_count: 10,
+          },
+          {
+            product_id: 'prod-456',
+            product_title: 'Product 2',
+            sent_count: 0,
+            failed_count: 15,
+          },
+          {
+            product_id: 'prod-789',
+            product_title: 'Product 3',
+            sent_count: 30,
+            failed_count: 0,
+          },
+        ],
+      };
+
+      (mockDatabaseService.getNotificationStats as jest.Mock).mockReturnValue(
+        mockStats,
+      );
+
+      const result = service.getNotificationStats();
+
+      expect(result.countByProduct[0].totalCount).toBe(35);
+      expect(result.countByProduct[1].totalCount).toBe(15);
+      expect(result.countByProduct[2].totalCount).toBe(30);
+    });
+
+    it('should handle empty results', () => {
+      const mockStats = {
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      };
+
+      (mockDatabaseService.getNotificationStats as jest.Mock).mockReturnValue(
+        mockStats,
+      );
+
+      const result = service.getNotificationStats();
+
+      expect(result.totalSent).toBe(0);
+      expect(result.totalFailed).toBe(0);
+      expect(result.countByProduct).toEqual([]);
+    });
+  });
+
   describe('Edge cases', () => {
     it('should handle product with no variants', async () => {
       execFileSuccess();
@@ -648,6 +1038,65 @@ describe('NotificationService', () => {
       expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
         mockProduct.id,
         true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.any(String),
+        }),
+      );
+    });
+
+    it('should escape backslashes and quotes in notification messages', async () => {
+      execFileSuccess();
+
+      const productWithSpecialChars: ProductDto = {
+        ...mockProduct,
+        title: 'Product with "quotes" and \\backslashes\\',
+      };
+
+      const result = await service.sendAvailabilityNotification(
+        productWithSpecialChars,
+      );
+
+      expect(result).toBe(true);
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('\\"quotes\\"');
+      expect(script).toContain('\\\\backslashes\\\\');
+    });
+
+    it('should handle product available with some unavailable variants', async () => {
+      execFileSuccess();
+
+      const productMixedVariants: ProductDto = {
+        ...mockProduct,
+        available: true,
+        variants: [
+          {
+            id: '1',
+            title: 'Available',
+            price: 50,
+            sku: 'SKU1',
+            available: true,
+            inventoryQuantity: 5,
+          },
+          {
+            id: '2',
+            title: 'Unavailable',
+            price: 60,
+            sku: 'SKU2',
+            available: false,
+            inventoryQuantity: 0,
+          },
+        ],
+      };
+
+      await service.sendAvailabilityNotification(productMixedVariants);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        productMixedVariants.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'became available (1 variant(s))',
+        }),
       );
     });
   });
