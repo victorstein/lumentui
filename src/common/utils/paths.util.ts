@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import { fileURLToPath } from 'url';
 
 /**
  * Centralized path resolution utility for LumenTUI
@@ -11,16 +12,33 @@ import * as fs from 'fs';
  */
 export class PathsUtil {
   /**
+   * Get __dirname equivalent for both CommonJS and ESM
+   * In CommonJS: uses global __dirname
+   * In ESM: converts import.meta.url to path
+   */
+  private static getDirname(): string {
+    // Check if we're in CommonJS or ESM
+    if (typeof __dirname !== 'undefined') {
+      // CommonJS
+      return __dirname;
+    } else {
+      // ESM - use import.meta.url
+      // @ts-ignore - import.meta.url exists in ESM
+      return path.dirname(fileURLToPath(import.meta.url));
+    }
+  }
+
+  /**
    * Get the installation directory (where the compiled binaries are)
    * This works for both development and installed packages
    */
   static getInstallDir(): string {
-    // __dirname in compiled code points to dist/common/utils
+    // Current file is in dist/common/utils
     // We need to go up 2 levels to reach dist/
     // For development: /path/to/repo/dist
     // For Homebrew: /opt/homebrew/lib/node_modules/lumentui/dist (or similar)
     // For npm global: /usr/local/lib/node_modules/lumentui/dist (or similar)
-    return path.resolve(__dirname, '..', '..');
+    return path.resolve(this.getDirname(), '..', '..');
   }
 
   /**
