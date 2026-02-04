@@ -339,7 +339,7 @@ describe('DatabaseService', () => {
     it('should record notification', () => {
       service.recordNotification('123', true);
 
-      const history = service.getNotificationHistory('123');
+      const history = service.getNotificationHistory({ productId: '123' });
       expect(history).toHaveLength(1);
       expect(history[0].product_id).toBe('123');
       expect(history[0].sent).toBe(1);
@@ -351,7 +351,7 @@ describe('DatabaseService', () => {
       service.recordNotification('123', true);
       service.recordNotification('123', false);
 
-      const history = service.getNotificationHistory('123');
+      const history = service.getNotificationHistory({ productId: '123' });
       expect(history).toHaveLength(3);
     });
 
@@ -361,7 +361,10 @@ describe('DatabaseService', () => {
         service.recordNotification('123', true);
       }
 
-      const history = service.getNotificationHistory('123', 2);
+      const history = service.getNotificationHistory({
+        productId: '123',
+        limit: 2,
+      });
       expect(history).toHaveLength(2);
     });
 
@@ -376,6 +379,207 @@ describe('DatabaseService', () => {
       const productIds = recent.map((r) => r.product_id);
       expect(productIds).toContain('123');
       expect(productIds).toContain('124');
+    });
+  });
+
+  describe('getNotificationHistory with filters', () => {
+    beforeEach(() => {
+      service.saveProducts(mockProducts);
+    });
+
+    it('should filter by productId', () => {
+      service.recordNotification('123', true);
+      service.recordNotification('124', true);
+      service.recordNotification('123', false);
+
+      const history = service.getNotificationHistory({ productId: '123' });
+      expect(history).toHaveLength(2);
+      expect(history.every((n) => n.product_id === '123')).toBe(true);
+    });
+
+    it('should filter by status (sent)', () => {
+      service.recordNotification('123', true);
+      service.recordNotification('123', true);
+      service.recordNotification('123', false);
+
+      const history = service.getNotificationHistory({ status: 'sent' });
+      expect(history).toHaveLength(2);
+      expect(history.every((n) => n.sent === 1)).toBe(true);
+    });
+
+    it('should filter by status (failed)', () => {
+      service.recordNotification('123', true);
+      service.recordNotification('123', false);
+      service.recordNotification('123', false);
+
+      const history = service.getNotificationHistory({ status: 'failed' });
+      expect(history).toHaveLength(2);
+      expect(history.every((n) => n.sent === 0)).toBe(true);
+    });
+
+    it('should filter by dateFrom', () => {
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      service.recordNotification('123', true);
+
+      const history = service.getNotificationHistory({
+        dateFrom: yesterday.toISOString(),
+      });
+      expect(history.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should filter by dateTo', () => {
+      const now = new Date();
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      service.recordNotification('123', true);
+
+      const history = service.getNotificationHistory({
+        dateTo: tomorrow.toISOString(),
+      });
+      expect(history.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should filter by date range', () => {
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      service.recordNotification('123', true);
+
+      const history = service.getNotificationHistory({
+        dateFrom: yesterday.toISOString(),
+        dateTo: tomorrow.toISOString(),
+      });
+      expect(history.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should apply limit', () => {
+      for (let i = 0; i < 10; i++) {
+        service.recordNotification('123', true);
+      }
+
+      const history = service.getNotificationHistory({ limit: 5 });
+      expect(history).toHaveLength(5);
+    });
+
+    it('should apply offset', () => {
+      for (let i = 0; i < 10; i++) {
+        service.recordNotification('123', true);
+      }
+
+      const allHistory = service.getNotificationHistory({ limit: 10 });
+      const offsetHistory = service.getNotificationHistory({
+        limit: 5,
+        offset: 5,
+      });
+
+      expect(offsetHistory).toHaveLength(5);
+      expect(offsetHistory[0].id).not.toBe(allHistory[0].id);
+    });
+
+    it('should combine multiple filters', () => {
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      service.recordNotification('123', true);
+      service.recordNotification('123', false);
+      service.recordNotification('124', true);
+
+      const history = service.getNotificationHistory({
+        productId: '123',
+        status: 'sent',
+        dateFrom: yesterday.toISOString(),
+        limit: 10,
+      });
+
+      expect(history).toHaveLength(1);
+      expect(history[0].product_id).toBe('123');
+      expect(history[0].sent).toBe(1);
+    });
+
+    it('should return all notifications when no filters provided', () => {
+      service.recordNotification('123', true);
+      service.recordNotification('124', false);
+
+      const history = service.getNotificationHistory();
+      expect(history.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should return empty array when no notifications match filters', () => {
+      service.recordNotification('123', true);
+
+      const history = service.getNotificationHistory({ productId: '999' });
+      expect(history).toHaveLength(0);
+    });
+  });
+
+  describe('getNotificationStats', () => {
+    beforeEach(() => {
+      service.saveProducts(mockProducts);
+    });
+
+    it('should return stats for sent and failed notifications', () => {
+      service.recordNotification('123', true);
+      service.recordNotification('123', true);
+      service.recordNotification('124', false);
+
+      const stats = service.getNotificationStats();
+
+      expect(stats.totalSent).toBe(2);
+      expect(stats.totalFailed).toBe(1);
+    });
+
+    it('should return count by product', () => {
+      service.recordNotification('123', true, {
+        productTitle: 'Test Product 1',
+      });
+      service.recordNotification('123', true, {
+        productTitle: 'Test Product 1',
+      });
+      service.recordNotification('123', false, {
+        productTitle: 'Test Product 1',
+      });
+      service.recordNotification('124', true, {
+        productTitle: 'Test Product 2',
+      });
+
+      const stats = service.getNotificationStats();
+
+      expect(stats.countByProduct).toHaveLength(2);
+
+      const product123Stats = stats.countByProduct.find(
+        (p) => p.product_id === '123',
+      );
+      expect(product123Stats?.sent_count).toBe(2);
+      expect(product123Stats?.failed_count).toBe(1);
+
+      const product124Stats = stats.countByProduct.find(
+        (p) => p.product_id === '124',
+      );
+      expect(product124Stats?.sent_count).toBe(1);
+      expect(product124Stats?.failed_count).toBe(0);
+    });
+
+    it('should order products by total notification count descending', () => {
+      service.recordNotification('123', true);
+      service.recordNotification('124', true);
+      service.recordNotification('124', false);
+      service.recordNotification('124', false);
+
+      const stats = service.getNotificationStats();
+
+      expect(stats.countByProduct[0].product_id).toBe('124');
+      expect(stats.countByProduct[1].product_id).toBe('123');
+    });
+
+    it('should return zeros when no notifications exist', () => {
+      const stats = service.getNotificationStats();
+
+      expect(stats.totalSent).toBe(0);
+      expect(stats.totalFailed).toBe(0);
+      expect(stats.countByProduct).toHaveLength(0);
     });
   });
 });

@@ -5,7 +5,13 @@ import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ProductDto } from '../../api/dto/product.dto';
-import { ProductEntity, PollEntity } from '../entities/product.entity';
+import {
+  ProductEntity,
+  PollEntity,
+  NotificationEntity,
+  NotificationHistoryFilters,
+  NotificationStats,
+} from '../entities/product.entity';
 import { PathsUtil } from '../../../common/utils/paths.util';
 
 @Injectable()
@@ -141,6 +147,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         availability_change TEXT,
         error_message TEXT,
         FOREIGN KEY (product_id) REFERENCES products (id)
+      )
+    `);
+
+    // Create notification_history_metadata table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS notification_history_metadata (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        last_cleanup_timestamp TEXT NOT NULL,
+        records_deleted INTEGER NOT NULL,
+        created_at TEXT NOT NULL
       )
     `);
 
@@ -385,19 +401,56 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Get notification history for a product
+   * Get notification history with advanced filtering
    */
-  getNotificationHistory(productId: string, limit: number = 10): any[] {
+  getNotificationHistory(
+    filters?: NotificationHistoryFilters,
+  ): NotificationEntity[] {
     try {
-      return this.queryAll(
-        `
-          SELECT * FROM notifications
-          WHERE product_id = ?
-          ORDER BY timestamp DESC
-          LIMIT ?
-        `,
-        [productId, limit],
-      );
+      let query = 'SELECT * FROM notifications';
+      const params: any[] = [];
+      const whereClauses: string[] = [];
+
+      if (filters?.dateFrom) {
+        const dateFromTimestamp = new Date(filters.dateFrom).getTime();
+        whereClauses.push('timestamp >= ?');
+        params.push(dateFromTimestamp);
+      }
+
+      if (filters?.dateTo) {
+        const dateToTimestamp = new Date(filters.dateTo).getTime();
+        whereClauses.push('timestamp <= ?');
+        params.push(dateToTimestamp);
+      }
+
+      if (filters?.productId) {
+        whereClauses.push('product_id = ?');
+        params.push(filters.productId);
+      }
+
+      if (filters?.status) {
+        const sentValue = filters.status === 'sent' ? 1 : 0;
+        whereClauses.push('sent = ?');
+        params.push(sentValue);
+      }
+
+      if (whereClauses.length > 0) {
+        query += ' WHERE ' + whereClauses.join(' AND ');
+      }
+
+      query += ' ORDER BY timestamp DESC';
+
+      if (filters?.limit) {
+        query += ' LIMIT ?';
+        params.push(filters.limit);
+      }
+
+      if (filters?.offset) {
+        query += ' OFFSET ?';
+        params.push(filters.offset);
+      }
+
+      return this.queryAll<NotificationEntity>(query, params);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -406,6 +459,57 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         'DatabaseService',
       );
       return [];
+    }
+  }
+
+  /**
+   * Get notification statistics
+   */
+  getNotificationStats(): NotificationStats {
+    try {
+      const totalSentResult = this.queryOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM notifications WHERE sent = 1',
+      );
+
+      const totalFailedResult = this.queryOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM notifications WHERE sent = 0',
+      );
+
+      const countByProductResult = this.queryAll<{
+        product_id: string;
+        product_title: string | null;
+        sent_count: number;
+        failed_count: number;
+      }>(
+        `
+          SELECT
+            product_id,
+            product_title,
+            SUM(CASE WHEN sent = 1 THEN 1 ELSE 0 END) as sent_count,
+            SUM(CASE WHEN sent = 0 THEN 1 ELSE 0 END) as failed_count
+          FROM notifications
+          GROUP BY product_id, product_title
+          ORDER BY (sent_count + failed_count) DESC
+        `,
+      );
+
+      return {
+        totalSent: totalSentResult?.count || 0,
+        totalFailed: totalFailedResult?.count || 0,
+        countByProduct: countByProductResult,
+      };
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to get notification stats: ${errorMessage}`,
+        'DatabaseService',
+      );
+      return {
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      };
     }
   }
 

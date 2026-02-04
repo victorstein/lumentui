@@ -27,4 +27,27 @@ export interface NotificationEntity {
   product_id: string;
   timestamp: number;
   sent: number; // 0 or 1
+  product_title?: string | null;
+  availability_change?: string | null;
+  error_message?: string | null;
+}
+
+export interface NotificationHistoryFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  productId?: string;
+  status?: 'sent' | 'failed';
+  limit?: number;
+  offset?: number;
+}
+
+export interface NotificationStats {
+  totalSent: number;
+  totalFailed: number;
+  countByProduct: Array<{
+    product_id: string;
+    product_title: string | null;
+    sent_count: number;
+    failed_count: number;
+  }>;
 }

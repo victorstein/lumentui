@@ -380,10 +380,10 @@ describe('NotificationService', () => {
       const history = service.getNotificationHistory('123');
 
       expect(history).toEqual(mockHistory);
-      expect(mockDatabaseService.getNotificationHistory).toHaveBeenCalledWith(
-        '123',
-        10,
-      );
+      expect(mockDatabaseService.getNotificationHistory).toHaveBeenCalledWith({
+        productId: '123',
+        limit: 10,
+      });
     });
 
     it('should respect custom limit', () => {
@@ -393,10 +393,10 @@ describe('NotificationService', () => {
 
       service.getNotificationHistory('123', 5);
 
-      expect(mockDatabaseService.getNotificationHistory).toHaveBeenCalledWith(
-        '123',
-        5,
-      );
+      expect(mockDatabaseService.getNotificationHistory).toHaveBeenCalledWith({
+        productId: '123',
+        limit: 5,
+      });
     });
 
     it('should handle database errors gracefully', () => {

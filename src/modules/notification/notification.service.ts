@@ -152,8 +152,7 @@ export class NotificationService implements OnModuleInit {
    */
 
   getNotificationHistory(productId: string, limit: number = 10): any[] {
-    // Use DatabaseService method instead of raw db access
-    return this.databaseService.getNotificationHistory(productId, limit);
+    return this.databaseService.getNotificationHistory({ productId, limit });
   }
 
   /**
