@@ -3,6 +3,7 @@ export interface ProductEntity {
   title: string;
   handle: string;
   price: number;
+  compare_at_price: number | null;
   available: number; // 0 or 1 (SQLite boolean)
   variants: string; // JSON string
   images: string; // JSON string

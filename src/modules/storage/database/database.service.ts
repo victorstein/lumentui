@@ -113,6 +113,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         title TEXT NOT NULL,
         handle TEXT NOT NULL,
         price REAL NOT NULL,
+        compare_at_price REAL,
         available INTEGER NOT NULL,
         variants TEXT NOT NULL,
         images TEXT NOT NULL,
@@ -122,6 +123,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         last_seen_at INTEGER NOT NULL
       )
     `);
+
+    // Add compare_at_price column if it doesn't exist (migration for existing databases)
+    const columnsResult = this.db.exec(`PRAGMA table_info(products)`);
+    if (columnsResult.length > 0) {
+      const columns = columnsResult[0].values.map((row) => row[1]);
+      if (!columns.includes('compare_at_price')) {
+        this.db.run(`ALTER TABLE products ADD COLUMN compare_at_price REAL`);
+        this.logger.log(
+          'Added compare_at_price column to products table',
+          'DatabaseService',
+        );
+      }
+    }
 
     // Create polls table
     this.db.run(`
@@ -200,12 +214,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         this.execute(
           `
           INSERT INTO products (
-            id, title, handle, price, available, variants, images,
+            id, title, handle, price, compare_at_price, available, variants, images,
             description, url, first_seen_at, last_seen_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             price = excluded.price,
+            compare_at_price = excluded.compare_at_price,
             available = excluded.available,
             variants = excluded.variants,
             images = excluded.images,
@@ -217,6 +232,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
             product.title,
             product.handle,
             product.price,
+            product.compareAtPrice ?? null,
             product.available ? 1 : 0,
             JSON.stringify(product.variants),
             JSON.stringify(product.images),
