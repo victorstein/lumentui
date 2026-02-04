@@ -197,21 +197,62 @@ LumenTUI uses a **Git Flow** workflow with two primary branches:
 
 ### Code Comments Policy
 
-**Only add comments where absolutely necessary.** Well-written code should be self-documenting.
+**CRITICAL: Comments are restricted to only the most important scenarios where clarification is absolutely necessary.**
 
-**DO add comments for:**
+Code must be **self-documenting** through:
 
-- Complex algorithms or business logic that isn't obvious
-- Non-obvious "why" explanations (not "what" the code does)
-- Workarounds for bugs or edge cases
-- Public API documentation (JSDoc for exported functions/classes)
+- Clear, descriptive variable and function names
+- Well-structured, readable syntax
+- Proper TypeScript types that convey intent
+- Small, focused functions with single responsibilities
 
-**DO NOT add comments for:**
+**ONLY add comments for:**
 
-- Obvious code (e.g., `// increment counter` above `counter++`)
-- Function names that already describe what they do
-- Simple CRUD operations
-- Type annotations that TypeScript already provides
+- **Complex algorithms** where the "why" isn't obvious from reading the code
+- **Workarounds** for external bugs or limitations (with ESLint disable justifications)
+- **Security-sensitive code** that needs extra context
+- **Performance optimizations** that sacrifice readability for speed
+- **Public API documentation** (JSDoc) for exported library functions
+
+**NEVER add comments for:**
+
+- What the code does (the code itself should show this)
+- Obvious operations (`// increment counter`, `// loop through items`)
+- Function names that already describe their purpose
+- CRUD operations, getters, setters
+- Type information (TypeScript provides this)
+- Section dividers or decorative comments
+- TODOs (use beads/issues instead)
+
+**Examples of bad comments to avoid:**
+
+```typescript
+// Get user by ID
+function getUserById(id: string) { ... }  // ❌ Function name already says this
+
+// Loop through products
+products.forEach(product => { ... })      // ❌ Obvious from syntax
+
+let count = 0;  // Initialize counter     // ❌ Obvious from code
+```
+
+**Examples of acceptable comments:**
+
+```typescript
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+// Justification: Function() required to hide import.meta from Jest parser
+const getMetaUrl = new Function('return import.meta.url'); // ✅ Workaround explanation
+
+// Batch size of 100 chosen to balance memory usage vs API rate limits
+const BATCH_SIZE = 100; // ✅ Non-obvious reasoning
+```
+
+**If you find yourself writing a comment, first ask:**
+
+1. Can I rename variables/functions to make this clearer?
+2. Can I refactor into smaller, more focused functions?
+3. Can I use TypeScript types to convey this information?
+4. Is this comment explaining "what" (bad) or "why" (potentially good)?
 
 **NO EMOJIS** in code unless explicitly requested by the user.
 
