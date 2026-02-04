@@ -19,5 +19,5 @@
     "noImplicitAny": true
   },
   "include": ["src/ui/**/*", "src/ui/hooks/**/*", "src/ui/components/**/*"],
-  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "src/common/**/*"]
 }

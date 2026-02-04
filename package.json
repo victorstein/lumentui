@@ -24,7 +24,7 @@
     "lumentui": "./dist/cli.js"
   },
   "scripts": {
-    "build": "pnpm run build:daemon && pnpm run build:cli && pnpm run build:ui",
+    "build": "pnpm run build:daemon && pnpm run build:ui && pnpm run build:cli",
     "build:daemon": "nest build",
     "build:cli": "tsc -p tsconfig.cli.json && chmod +x dist/cli.js",
     "build:ui": "rm -f tsconfig.ui.tsbuildinfo && tsc -p tsconfig.ui.json && echo '{\"type\":\"module\"}' > dist/ui/package.json",
@@ -109,17 +109,21 @@
     "moduleFileExtensions": [
       "js",
       "json",
-      "ts"
+      "ts",
+      "tsx"
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": [
+      "^.+\\.(t|j)sx?$": [
         "ts-jest",
         {
           "tsconfig": "tsconfig.spec.json"
         }
       ]
+    },
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
