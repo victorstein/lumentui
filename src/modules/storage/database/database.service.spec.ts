@@ -233,6 +233,10 @@ describe('DatabaseService', () => {
   });
 
   describe('recordPoll', () => {
+    beforeEach(() => {
+      service['db'].run('DELETE FROM polls');
+    });
+
     it('should record a successful poll', () => {
       const id = service.recordPoll({
         productCount: 10,
@@ -271,6 +275,7 @@ describe('DatabaseService', () => {
 
   describe('getPolls', () => {
     beforeEach(() => {
+      service['db'].run('DELETE FROM polls');
       // Record multiple polls
       for (let i = 0; i < 5; i++) {
         service.recordPoll({
