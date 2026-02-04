@@ -22,7 +22,7 @@ Reviews code changes before committing.
 
 - [ ] No `// @ts-ignore` or `as any`
 - [ ] Proper type definitions
-- [ ] Build passes: `npm run build`
+- [ ] Build passes: `pnpm run build`
 
 ### NestJS Patterns
 
@@ -42,17 +42,17 @@ Reviews code changes before committing.
 - [ ] Files: `kebab-case.ts`
 - [ ] Classes: `PascalCase`
 - [ ] Functions: `camelCase`
-- [ ] Run: `npm run lint`
+- [ ] Run: `pnpm run lint`
 
 ### Testing
 
-- [ ] Tests pass: `npm test`
-- [ ] E2E tests pass: `npm run test:e2e`
+- [ ] Tests pass: `pnpm test`
+- [ ] E2E tests pass: `pnpm run test:e2e`
 - [ ] Coverage for critical paths
 
 ## Review Process
 
-1. Run automated checks (`npm run build && npm test && npm run lint`)
+1. Run automated checks (`pnpm run build && pnpm test && pnpm run lint`)
 2. Review changed files
 3. Provide categorized feedback:
    - Critical (blocks merge)

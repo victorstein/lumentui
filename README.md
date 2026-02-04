@@ -94,9 +94,13 @@ brew tap victorstein/lumentui
 brew install lumentui
 ```
 
-### npm
+### Package Manager
 
 ```bash
+# Using pnpm (recommended)
+pnpm install -g lumentui
+
+# Or using npm
 npm install -g lumentui
 ```
 

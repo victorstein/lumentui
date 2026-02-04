@@ -41,9 +41,9 @@ SchedulerService (@Cron every 30min or forcePoll)
 ## Quick Commands
 
 ```bash
-npm run start:daemon   # Run daemon directly
-npm run dev            # Watch mode
-npm test               # Run tests
+pnpm run start:daemon   # Run daemon directly
+pnpm run dev            # Watch mode
+pnpm test               # Run tests
 ```
 
 ## Task Completion

@@ -46,12 +46,12 @@ src/modules/
 ## Quick Commands
 
 ```bash
-npm run build        # Build (nest build + CLI)
-npm run dev          # Watch mode
-npm test             # Run unit tests
-npm run test:e2e     # Run integration/e2e tests
-npm run test:cov     # Coverage report
-npm run lint         # ESLint
+ppnpm runbuild        # Build (nest build + CLI)
+pnpm rundev          # Watch mode
+pnpm test             # Run unit tests
+pnpm runtest:e2e     # Run integration/e2e tests
+pnpm runtest:cov     # Coverage report
+pnpm runlint         # ESLint
 ```
 
 ## Task Completion

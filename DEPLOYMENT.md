@@ -25,7 +25,7 @@ Complete guide for deploying LumentuiAPI to production environment.
 
 - **Operating System:** macOS 10.15+ or Linux (Ubuntu 20.04+)
 - **Node.js:** 18.x or higher (LTS recommended)
-- **npm:** 9.x or higher
+- **pnpm:** 8.x or higher
 - **PM2:** 5.x or higher (process manager)
 - **Chrome Browser:** Latest stable version
 - **node-notifier:** For macOS native notifications
@@ -44,11 +44,11 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Install PM2 globally
-npm install -g pm2
+ppnpm install -g pm2
 
 # Verify installations
 node --version   # Should be >= v18.0.0
-npm --version    # Should be >= 9.0.0
+pnpm --version   # Should be >= 8.0.0
 pm2 --version    # Should be >= 5.0.0
 ```
 
@@ -56,10 +56,10 @@ pm2 --version    # Should be >= 5.0.0
 
 ```bash
 # Verify node-notifier is available
-npm list node-notifier
+pnpm list node-notifier
 
 # If not installed, it will be installed with dependencies
-npm install
+pnpm install
 
 # Test macOS notifications
 node -e "const notifier = require('node-notifier'); notifier.notify('LumentuiAPI deployment test');"
@@ -85,17 +85,17 @@ cd lumentui-prod
 
 ```bash
 # Install production dependencies only
-npm ci --production
+pnpm install --frozen-lockfile --production
 
 # Or install all dependencies (includes devDependencies for building)
-npm ci
+pnpm install --frozen-lockfile
 ```
 
 ### 3. Build Application
 
 ```bash
 # Build TypeScript to JavaScript
-npm run build
+pnpm runbuild
 
 # Verify build output
 ls -la dist/
@@ -576,14 +576,14 @@ git pull origin main
 
 ```bash
 # Install new dependencies
-npm ci --production
+pnpm install --frozen-lockfile --production
 ```
 
 #### 4. Rebuild Application
 
 ```bash
 # Build TypeScript
-npm run build
+pnpm runbuild
 
 # Verify build
 ls -la dist/main.js
@@ -593,13 +593,13 @@ ls -la dist/main.js
 
 ```bash
 # Install dev dependencies if needed
-npm ci
+pnpm install --frozen-lockfile
 
 # Run tests
-npm test
+pnpm test
 
 # Check coverage
-npm run test:cov
+pnpm runtest:cov
 ```
 
 #### 6. Restart Application
@@ -646,8 +646,8 @@ cp .env.production.bak .env.production
 git reset --hard HEAD~1
 
 # Rebuild
-npm ci --production
-npm run build
+pnpm install --frozen-lockfile --production
+pnpm runbuild
 
 # Restart
 pm2 start lumentui-api
@@ -761,7 +761,7 @@ pm2 logs lumentui-api
 1. Verify node-notifier is installed:
 
    ```bash
-   npm list node-notifier
+   pnpm list node-notifier
    ```
 
 2. Check notification settings are enabled:

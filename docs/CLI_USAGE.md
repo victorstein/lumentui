@@ -24,14 +24,14 @@ Complete guide for using the LumentuiAPI command-line interface.
 
 ```bash
 cd $HOME/development/lumentui
-npm install
-npm run build
+pnpm install
+pnpm runbuild
 ```
 
 ### Global Installation (Optional)
 
 ```bash
-npm link
+pnpm link --global
 # Now 'lumentui' command is available globally
 ```
 
@@ -708,7 +708,7 @@ lumentui doctor
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✅ Node.js version: v18.17.0 (OK)
-✅ npm version: 9.8.1 (OK)
+✅ pnpm version: 8.15.0 (OK)
 ✅ Chrome installed: Yes
 ✅ node-notifier available: Yes
 ✅ Database accessible: Yes
@@ -829,8 +829,8 @@ fi
 ```bash
 # Install and configure
 cd $HOME/development/lumentui
-npm install
-npm run build
+pnpm install
+pnpm runbuild
 
 # Authenticate
 node dist/cli.js auth

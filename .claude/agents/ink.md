@@ -48,8 +48,8 @@ src/ui/
 ## Quick Commands
 
 ```bash
-npm run build        # Build (includes TUI)
-npm test             # Run tests (includes useDaemon.spec.ts)
+pnpm run build        # Build (includes TUI)
+pnpm test             # Run tests (includes useDaemon.spec.ts)
 ```
 
 ## Task Completion

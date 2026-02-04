@@ -52,7 +52,7 @@
 **Status:** ✅ All passing
 
 ```bash
-npm run test
+pnpm test
 ```
 
 **Test Files:**
@@ -73,7 +73,7 @@ npm run test
 **Skipped:** 2 (notification mocking complexity)
 
 ```bash
-npm run test:e2e
+pnpm test:e2e
 ```
 
 **Test File:**
@@ -99,7 +99,7 @@ npm run test:e2e
 ### TypeScript Compilation
 
 ```bash
-npm run build
+pnpm runbuild
 ```
 
 **Status:** ✅ **PASS**  
@@ -114,7 +114,7 @@ npm run build
 ### ESLint Results
 
 ```bash
-npm run lint
+pnpm runlint
 ```
 
 **Status:** ❌ **100 issues found**
@@ -197,22 +197,22 @@ npm run lint
 
 ```bash
 # Unit tests only
-npm run test
+pnpm test
 
 # Unit tests with coverage
-npm run test:cov
+pnpm test:cov
 
 # E2E integration tests
-npm run test:e2e
+pnpm test:e2e
 
 # Watch mode (unit tests)
-npm run test:watch
+pnpm test:watch
 ```
 
 ### Coverage Report
 
 ```bash
-npm run test:cov
+pnpm test:cov
 
 # Open HTML report
 open coverage/lcov-report/index.html
@@ -222,10 +222,10 @@ open coverage/lcov-report/index.html
 
 ```bash
 # Single test file
-npm run test -- src/modules/api/shopify/shopify.service.spec.ts
+pnpm test -- src/modules/api/shopify/shopify.service.spec.ts
 
 # Pattern matching
-npm run test -- --testNamePattern="DatabaseService"
+pnpm test -- --testNamePattern="DatabaseService"
 ```
 
 ---
@@ -322,7 +322,7 @@ While global coverage and lint are below target, all critical functionality is t
 
 For test failures or coverage questions:
 
-- Check test logs: `npm run test -- --verbose`
+- Check test logs: `pnpm test -- --verbose`
 - Review this document's troubleshooting section
 - Consult `test/MANUAL_TEST_RESULTS.md` for integration test details
 
