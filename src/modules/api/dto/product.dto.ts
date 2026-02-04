@@ -7,6 +7,7 @@ export interface ProductDto {
   title: string;
   handle: string;
   price: number; // Converted to number
+  compareAtPrice?: number | null;
   available: boolean;
   variants: VariantDto[];
   images: ImageDto[];

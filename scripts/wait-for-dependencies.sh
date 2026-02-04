@@ -2,7 +2,7 @@
 # Wait for Phases 5-6 completion monitoring script
 # Checks every 2 minutes for required files
 
-PROJECT_DIR="$HOME/clawd/development/lumentui/lumentui"
+PROJECT_DIR="$HOME/development/lumentui"
 CHECK_INTERVAL=120  # 2 minutes
 MAX_CHECKS=15       # 30 minutes total
 CURRENT_CHECK=0

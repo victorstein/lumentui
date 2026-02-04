@@ -23,15 +23,15 @@ Complete guide for using the LumentuiAPI command-line interface.
 ### Local Installation
 
 ```bash
-cd ~/clawd/development/lumentui/lumentui
-npm install
-npm run build
+cd $HOME/development/lumentui
+pnpm install
+pnpm runbuild
 ```
 
 ### Global Installation (Optional)
 
 ```bash
-npm link
+pnpm link --global
 # Now 'lumentui' command is available globally
 ```
 
@@ -74,7 +74,7 @@ Options:
   -h, --help         display help for command
 
 Commands:
-  auth [options]     Authenticate with shop.lumenalta.com
+  login [options]    Authenticate with shop.lumenalta.com
   start              Start daemon and TUI
   stop               Stop daemon
   status             Check daemon status
@@ -101,14 +101,14 @@ lumentui -V
 
 ## 🔐 Authentication Commands
 
-### `auth` - Authenticate with Shopify
+### `login` - Authenticate with Shopify
 
 Extract and store cookies from Chrome for shop.lumenalta.com.
 
 #### Basic Usage
 
 ```bash
-lumentui auth
+lumentui login
 ```
 
 **What happens:**
@@ -138,7 +138,7 @@ lumentui auth
 Verify if your stored session is still valid.
 
 ```bash
-lumentui auth --check
+lumentui login --check
 ```
 
 **Output (valid session):**
@@ -150,7 +150,7 @@ lumentui auth --check
 **Output (invalid/expired session):**
 
 ```
-❌ No valid session. Run: lumentui auth
+❌ No valid session. Run: lumentui login
 ```
 
 **Exit codes:**
@@ -164,7 +164,7 @@ Clear existing cookies and re-authenticate.
 
 ```bash
 rm data/cookies.json
-lumentui auth
+lumentui login
 ```
 
 ---
@@ -323,7 +323,7 @@ Database:
   Size:             2.1 MB
   Products:         42
 
-Notifications:
+macOS Notifications:
   Sent Today:       3
   Last Notification: 1h 23m ago
 ```
@@ -590,7 +590,7 @@ lumentui config --list
 
 Shop URL:          https://shop.lumenalta.com
 Poll Interval:     30 minutes
-Notification Phone: +50586826131
+Notifications:     Enabled (macOS)
 Database Path:     data/lumentui.db
 Log Level:         info
 Log File:          data/logs/app.log
@@ -658,7 +658,7 @@ lumentui logs -f
 [2025-01-21 15:30:02] [DEBUG] Fetching from Shopify API
 [2025-01-21 15:30:03] [INFO] Found 42 products
 [2025-01-21 15:30:03] [INFO] 2 new products detected
-[2025-01-21 15:30:04] [INFO] Notification sent: +50586826131
+[2025-01-21 15:30:04] [INFO] macOS notification sent
 ```
 
 #### Last N Lines
@@ -708,9 +708,9 @@ lumentui doctor
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✅ Node.js version: v18.17.0 (OK)
-✅ npm version: 9.8.1 (OK)
+✅ pnpm version: 8.15.0 (OK)
 ✅ Chrome installed: Yes
-✅ Clawdbot available: Yes
+✅ node-notifier available: Yes
 ✅ Database accessible: Yes
 ✅ Cookies file exists: Yes
 ✅ Cookies valid: Yes
@@ -828,9 +828,9 @@ fi
 
 ```bash
 # Install and configure
-cd ~/clawd/development/lumentui/lumentui
-npm install
-npm run build
+cd $HOME/development/lumentui
+pnpm install
+pnpm runbuild
 
 # Authenticate
 node dist/cli.js auth
@@ -867,8 +867,8 @@ lumentui logs --level=error --lines=50
 
 # Re-authenticate
 rm data/cookies.json
-lumentui auth --check
-lumentui auth
+lumentui login --check
+lumentui login
 
 # Restart daemon
 lumentui stop
@@ -896,19 +896,19 @@ lumentui start
 ### Command-specific Help
 
 ```bash
-lumentui auth --help
+lumentui login --help
 lumentui start --help
 lumentui list --help
 ```
 
 ### Common Issues
 
-| Issue               | Command                 | Solution                 |
-| ------------------- | ----------------------- | ------------------------ |
-| Daemon won't start  | `lumentui doctor`       | Check diagnostics output |
-| Cookies expired     | `lumentui auth --check` | Re-authenticate          |
-| No products showing | `lumentui logs -n 50`   | Check API errors         |
-| High memory usage   | `lumentui status`       | Check uptime, restart    |
+| Issue               | Command                  | Solution                 |
+| ------------------- | ------------------------ | ------------------------ |
+| Daemon won't start  | `lumentui doctor`        | Check diagnostics output |
+| Cookies expired     | `lumentui login --check` | Re-authenticate          |
+| No products showing | `lumentui logs -n 50`    | Check API errors         |
+| High memory usage   | `lumentui status`        | Check uptime, restart    |
 
 ### Support
 

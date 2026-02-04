@@ -1,6 +1,8 @@
 import { Injectable, LoggerService as NestLoggerService } from '@nestjs/common';
 import * as winston from 'winston';
 import { ConfigService } from '@nestjs/config';
+import { PathsUtil } from '../utils/paths.util';
+import * as path from 'path';
 
 @Injectable()
 export class LoggerService implements NestLoggerService {
@@ -10,8 +12,44 @@ export class LoggerService implements NestLoggerService {
     const logLevel = this.configService.get<string>('LOG_LEVEL', 'info');
     const logFile = this.configService.get<string>(
       'LOG_FILE',
-      'data/logs/app.log',
+      PathsUtil.getDefaultLogPath(),
     );
+
+    // Ensure log directory exists
+    const logDir = path.dirname(logFile);
+    PathsUtil.ensureDir(logDir);
+
+    const transports: winston.transport[] = [
+      // File transport (always active)
+      new winston.transports.File({
+        filename: logFile,
+        format: winston.format.combine(
+          winston.format.timestamp(),
+          winston.format.json(),
+        ),
+      }),
+    ];
+
+    // Only add console transport when running as daemon (not CLI)
+    if (!process.env.LUMENTUI_CLI_MODE) {
+      transports.push(
+        new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.printf(
+              ({ timestamp, level, message, context, ...meta }) => {
+                const ctx =
+                  context && typeof context === 'string' ? `[${context}]` : '';
+                const metaStr = Object.keys(meta).length
+                  ? JSON.stringify(meta)
+                  : '';
+                return `${String(timestamp)} ${String(level)} ${ctx} ${String(message)} ${metaStr}`;
+              },
+            ),
+          ),
+        }),
+      );
+    }
 
     this.logger = winston.createLogger({
       level: logLevel,
@@ -21,51 +59,27 @@ export class LoggerService implements NestLoggerService {
         winston.format.splat(),
         winston.format.json(),
       ),
-      transports: [
-        // Console transport
-        new winston.transports.Console({
-          format: winston.format.combine(
-            winston.format.colorize(),
-            winston.format.printf(
-              ({ timestamp, level, message, context, ...meta }) => {
-                const ctx = context ? `[${context}]` : '';
-                const metaStr = Object.keys(meta).length
-                  ? JSON.stringify(meta)
-                  : '';
-                return `${timestamp} ${level} ${ctx} ${message} ${metaStr}`;
-              },
-            ),
-          ),
-        }),
-        // File transport
-        new winston.transports.File({
-          filename: logFile,
-          format: winston.format.combine(
-            winston.format.timestamp(),
-            winston.format.json(),
-          ),
-        }),
-      ],
+      transports,
     });
   }
 
-  log(message: any, context?: string) {
+  log(message: string, context?: string) {
     this.logger.info(message, { context });
   }
 
-  error(message: any, trace?: string, context?: string) {
+  error(message: string, trace?: string, context?: string) {
     this.logger.error(message, { context, trace });
   }
 
-  warn(message: any, context?: string) {
+  warn(message: string, context?: string) {
     this.logger.warn(message, { context });
   }
 
-  debug(message: any, context?: string) {
+  debug(message: string, context?: string) {
     this.logger.debug(message, { context });
   }
 
-  verbose(message: any, context?: string) {
+  verbose(message: string, context?: string) {
     this.logger.verbose(message, { context });
   }
 }

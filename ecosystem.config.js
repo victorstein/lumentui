@@ -19,8 +19,8 @@ module.exports = {
       // Script to execute
       script: './dist/main.js',
 
-      // Working directory (change to your production path)
-      cwd: '/home/clawdbot/production/lumentui-prod',
+      // Working directory (relative to current directory)
+      cwd: process.cwd(),
 
       // Node.js interpreter
       interpreter: 'node',
@@ -123,11 +123,11 @@ module.exports = {
   // ==========================================
   deploy: {
     production: {
-      user: 'clawdbot',
-      host: 'steincloud',
+      user: process.env.USER || 'deploy',
+      host: 'your-host',
       ref: 'origin/main',
       repo: 'git@github.com:your-username/lumentui.git',
-      path: '/home/clawdbot/production/lumentui-prod',
+      path: process.env.HOME + '/production/lumentui-prod',
       'post-deploy':
         'npm ci --production && npm run build && pm2 reload ecosystem.config.js --env production',
       env: {

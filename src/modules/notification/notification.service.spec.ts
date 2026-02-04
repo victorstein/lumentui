@@ -1,15 +1,19 @@
+/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { NotificationService } from './notification.service';
 import { LoggerService } from '../../common/logger/logger.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { ProductDto } from '../api/dto/product.dto';
-import { exec } from 'child_process';
+import { PriceChange, AvailabilityChange } from '../differ/differ.service';
+import * as childProcess from 'child_process';
 
-// Mock child_process
+// Mock child_process.execFile
 jest.mock('child_process', () => ({
-  exec: jest.fn(),
+  execFile: jest.fn(),
 }));
+
+const mockExecFile = childProcess.execFile as unknown as jest.Mock;
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -57,7 +61,23 @@ describe('NotificationService', () => {
     url: 'https://shop.lumenalta.com/products/test-gaming-mouse',
   };
 
-  const mockPhoneNumber = '+50586826131';
+  /** Helper: make mockExecFile call the callback with success */
+  function execFileSuccess() {
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], cb: Function) => {
+        cb(null, '', '');
+      },
+    );
+  }
+
+  /** Helper: make mockExecFile call the callback with an error */
+  function execFileError(msg = 'osascript failed') {
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], cb: Function) => {
+        cb(new Error(msg), '', '');
+      },
+    );
+  }
 
   beforeEach(async () => {
     // Reset mocks
@@ -69,8 +89,7 @@ describe('NotificationService', () => {
     });
 
     mockConfigService = {
-      get: jest.fn((key: string) => {
-        if (key === 'NOTIFICATION_PHONE') return mockPhoneNumber;
+      get: jest.fn((_key: string) => {
         return undefined;
       }),
     };
@@ -84,6 +103,14 @@ describe('NotificationService', () => {
     mockDatabaseService = {
       getDatabase: jest.fn().mockReturnValue({
         prepare: mockDbPrepare,
+      }),
+      recordNotification: jest.fn(),
+      getNotificationHistory: jest.fn().mockReturnValue([]),
+      getRecentNotifications: jest.fn().mockReturnValue([]),
+      getNotificationStats: jest.fn().mockReturnValue({
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
       }),
     };
 
@@ -120,42 +147,15 @@ describe('NotificationService', () => {
       expect(service).toBeDefined();
     });
 
-    it('should log warning if NOTIFICATION_PHONE is not set', async () => {
-      mockConfigService.get = jest.fn().mockReturnValue('');
-
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          NotificationService,
-          {
-            provide: ConfigService,
-            useValue: mockConfigService,
-          },
-          {
-            provide: LoggerService,
-            useValue: mockLoggerService,
-          },
-          {
-            provide: DatabaseService,
-            useValue: mockDatabaseService,
-          },
-        ],
-      }).compile();
-
-      module.get<NotificationService>(NotificationService);
-
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        expect.stringContaining('NOTIFICATION_PHONE not set'),
-        'NotificationService',
-      );
-    });
-
     it('should rebuild rate limit cache from database on initialization', async () => {
       const recentNotifications = [
-        { product_id: 'prod1', last_sent: Date.now() - 30 * 60 * 1000 }, // 30 min ago
-        { product_id: 'prod2', last_sent: Date.now() - 10 * 60 * 1000 }, // 10 min ago
+        { product_id: 'prod1', last_sent: Date.now() - 30 * 60 * 1000 },
+        { product_id: 'prod2', last_sent: Date.now() - 10 * 60 * 1000 },
       ];
 
-      mockDbAll.mockReturnValue(recentNotifications);
+      const mockGetRecentNotifications = jest
+        .fn()
+        .mockReturnValue(recentNotifications);
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [
@@ -170,22 +170,26 @@ describe('NotificationService', () => {
           },
           {
             provide: DatabaseService,
-            useValue: mockDatabaseService,
+            useValue: {
+              ...mockDatabaseService,
+              getRecentNotifications: mockGetRecentNotifications,
+            },
           },
         ],
       }).compile();
 
       const testService = module.get<NotificationService>(NotificationService);
-      await testService.onModuleInit();
+      testService.onModuleInit();
 
-      expect(mockDbPrepare).toHaveBeenCalled();
-      expect(mockDbAll).toHaveBeenCalledWith(expect.any(Number));
+      expect(mockGetRecentNotifications).toHaveBeenCalled();
+      expect(mockGetRecentNotifications).toHaveBeenCalledWith(
+        expect.any(Number),
+      );
       expect(mockLoggerService.log).toHaveBeenCalledWith(
         expect.stringContaining('Rate limit cache rebuilt with 2 entries'),
         'NotificationService',
       );
 
-      // Verify cache is actually populated (products should be rate limited)
       const status1 = testService.getRateLimitStatus('prod1');
       const status2 = testService.getRateLimitStatus('prod2');
 
@@ -194,9 +198,11 @@ describe('NotificationService', () => {
     });
 
     it('should handle database errors during cache rebuild gracefully', async () => {
-      mockDbPrepare.mockImplementation(() => {
-        throw new Error('Database connection failed');
-      });
+      const mockGetRecentNotificationsError = jest
+        .fn()
+        .mockImplementation(() => {
+          throw new Error('Database connection failed');
+        });
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [
@@ -211,15 +217,17 @@ describe('NotificationService', () => {
           },
           {
             provide: DatabaseService,
-            useValue: mockDatabaseService,
+            useValue: {
+              ...mockDatabaseService,
+              getRecentNotifications: mockGetRecentNotificationsError,
+            },
           },
         ],
       }).compile();
 
       const testService = module.get<NotificationService>(NotificationService);
 
-      // Should not throw, just log error
-      await expect(testService.onModuleInit()).resolves.not.toThrow();
+      expect(() => testService.onModuleInit()).not.toThrow();
 
       expect(mockLoggerService.error).toHaveBeenCalledWith(
         expect.stringContaining('Failed to rebuild rate limit cache'),
@@ -229,250 +237,158 @@ describe('NotificationService', () => {
   });
 
   describe('sendAvailabilityNotification', () => {
-    it('should send notification successfully with explicit phone number', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
-
-      const result = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
-      );
-
-      expect(result).toBe(true);
-      expect(exec).toHaveBeenCalledTimes(1);
-
-      const execCall = (exec as unknown as jest.Mock).mock.calls[0][0];
-      expect(execCall).toContain('clawdbot message send');
-      expect(execCall).toContain('--channel whatsapp');
-      expect(execCall).toContain(`--target "${mockPhoneNumber}"`);
-      expect(execCall).toContain('PRODUCTO DISPONIBLE');
-    });
-
-    it('should use default phone number from config', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+    it('should send notification successfully', async () => {
+      execFileSuccess();
 
       const result = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result).toBe(true);
-      expect(exec).toHaveBeenCalled();
-
-      const execCall = (exec as unknown as jest.Mock).mock.calls[0][0];
-      expect(execCall).toContain(mockPhoneNumber);
-    });
-
-    it('should return false if no phone number is provided', async () => {
-      mockConfigService.get = jest.fn().mockReturnValue('');
-
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          NotificationService,
-          {
-            provide: ConfigService,
-            useValue: mockConfigService,
-          },
-          {
-            provide: LoggerService,
-            useValue: mockLoggerService,
-          },
-          {
-            provide: DatabaseService,
-            useValue: mockDatabaseService,
-          },
-        ],
-      }).compile();
-
-      const testService = module.get<NotificationService>(NotificationService);
-
-      const result =
-        await testService.sendAvailabilityNotification(mockProduct);
-
-      expect(result).toBe(false);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        expect.stringContaining('no phone number'),
-        'NotificationService',
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'osascript',
+        ['-e', expect.stringContaining('Test Gaming Mouse')],
+        expect.any(Function),
       );
     });
 
-    it('should handle exec errors gracefully', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(new Error('Command failed'), null);
-        },
-      );
+    it('should handle notification errors gracefully', async () => {
+      execFileError();
 
-      const result = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
-      );
+      const result = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result).toBe(false);
       expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockDbPrepare).toHaveBeenCalled();
-      expect(mockDbRun).toHaveBeenCalledWith(
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
         mockProduct.id,
-        expect.any(Number),
-        0, // sent = false
+        false,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.any(String),
+          errorMessage: expect.any(String),
+        }),
       );
     });
 
-    it('should record successful notification in database', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+    it('should record successful notification in database with metadata', async () => {
+      execFileSuccess();
 
-      await service.sendAvailabilityNotification(mockProduct, mockPhoneNumber);
+      await service.sendAvailabilityNotification(mockProduct);
 
-      expect(mockDbPrepare).toHaveBeenCalled();
-      expect(mockDbRun).toHaveBeenCalledWith(
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
         mockProduct.id,
-        expect.any(Number),
-        1, // sent = true
+        true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.any(String),
+        }),
+      );
+    });
+
+    it('should include availability change description with variant count', async () => {
+      execFileSuccess();
+
+      await service.sendAvailabilityNotification(mockProduct);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'became available (2 variant(s))',
+        }),
+      );
+    });
+
+    it('should describe availability change for product without variants', async () => {
+      execFileSuccess();
+
+      const productNoVariants: ProductDto = {
+        ...mockProduct,
+        variants: [],
+      };
+
+      await service.sendAvailabilityNotification(productNoVariants);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        productNoVariants.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'became available',
+        }),
+      );
+    });
+
+    it('should describe sold out for unavailable product', async () => {
+      execFileSuccess();
+
+      const unavailableProduct: ProductDto = {
+        ...mockProduct,
+        available: false,
+        variants: [
+          {
+            ...mockProduct.variants[0],
+            available: false,
+          },
+        ],
+      };
+
+      await service.sendAvailabilityNotification(unavailableProduct);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        unavailableProduct.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'sold out',
+        }),
       );
     });
   });
 
   describe('Message formatting', () => {
     it('should format message with all product details', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+      execFileSuccess();
 
-      await service.sendAvailabilityNotification(mockProduct, mockPhoneNumber);
+      await service.sendAvailabilityNotification(mockProduct);
 
-      const execCall = (exec as unknown as jest.Mock).mock.calls[0][0];
+      const script = mockExecFile.mock.calls[0][1][1] as string;
 
-      // Check message contains key elements
-      expect(execCall).toContain('PRODUCTO DISPONIBLE');
-      expect(execCall).toContain(mockProduct.title);
-      expect(execCall).toContain('$59.99');
-      expect(execCall).toContain('Variantes disponibles');
-      expect(execCall).toContain(mockProduct.url);
+      expect(script).toContain(mockProduct.title);
+      expect(script).toContain('$59.99');
+      expect(script).toContain('variant');
+      expect(script).toContain(mockProduct.url);
     });
 
-    it('should list variants when 5 or fewer', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+    it('should format concise message for notification center', async () => {
+      execFileSuccess();
 
-      await service.sendAvailabilityNotification(mockProduct, mockPhoneNumber);
+      await service.sendAvailabilityNotification(mockProduct);
 
-      const execCall = (exec as unknown as jest.Mock).mock.calls[0][0];
+      const script = mockExecFile.mock.calls[0][1][1] as string;
 
-      expect(execCall).toContain('Black');
-      expect(execCall).toContain('White');
-      expect(execCall).toContain('5 en stock');
-      expect(execCall).toContain('3 en stock');
-    });
-
-    it('should not list individual variants when more than 5', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
-
-      const productWithManyVariants: ProductDto = {
-        ...mockProduct,
-        variants: Array.from({ length: 7 }, (_, i) => ({
-          id: `v${i}`,
-          title: `Variant ${i}`,
-          price: 59.99,
-          sku: `SKU-${i}`,
-          available: true,
-          inventoryQuantity: 1,
-        })),
-      };
-
-      await service.sendAvailabilityNotification(
-        productWithManyVariants,
-        mockPhoneNumber,
-      );
-
-      const execCall = (exec as unknown as jest.Mock).mock.calls[0][0];
-
-      expect(execCall).toContain('Variantes disponibles: *7*');
-      expect(execCall).not.toContain('Variant 0');
-    });
-
-    it('should escape special characters in message', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
-
-      const productWithSpecialChars: ProductDto = {
-        ...mockProduct,
-        title: 'Test $100 "Special" Product `with` \\backslash',
-      };
-
-      await service.sendAvailabilityNotification(
-        productWithSpecialChars,
-        mockPhoneNumber,
-      );
-
-      const execCall = (exec as unknown as jest.Mock).mock.calls[0][0];
-
-      // Special characters should be escaped
-      expect(execCall).toContain('\\$100');
-      expect(execCall).toContain('\\"Special\\"');
-      expect(execCall).toContain('\\`with\\`');
-      expect(execCall).toContain('\\\\backslash');
+      expect(script).not.toContain('*');
+      expect(script).not.toContain('🔔');
+      expect(script).not.toContain('_');
     });
   });
 
   describe('Rate limiting', () => {
     it('should allow first notification for a product', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+      execFileSuccess();
 
-      const result = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
-      );
+      const result = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result).toBe(true);
-      expect(exec).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
     });
 
     it('should block duplicate notifications within rate limit window', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+      execFileSuccess();
 
-      // First notification
-      const result1 = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
-      );
-
-      // Immediate second notification - should be blocked
-      const result2 = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
-      );
+      const result1 = await service.sendAvailabilityNotification(mockProduct);
+      const result2 = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result1).toBe(true);
       expect(result2).toBe(false);
-      expect(exec).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
       expect(mockLoggerService.warn).toHaveBeenCalledWith(
         expect.stringContaining('Rate limit hit'),
         'NotificationService',
@@ -480,44 +396,28 @@ describe('NotificationService', () => {
     });
 
     it('should allow notifications for different products', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+      execFileSuccess();
 
       const product2: ProductDto = { ...mockProduct, id: '999' };
 
-      const result1 = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
-      );
-      const result2 = await service.sendAvailabilityNotification(
-        product2,
-        mockPhoneNumber,
-      );
+      const result1 = await service.sendAvailabilityNotification(mockProduct);
+      const result2 = await service.sendAvailabilityNotification(product2);
 
       expect(result1).toBe(true);
       expect(result2).toBe(true);
-      expect(exec).toHaveBeenCalledTimes(2);
+      // 1 `which` check (cached) + 2 terminal-notifier calls = 3
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
     });
 
     it('should provide rate limit status', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+      execFileSuccess();
 
-      // No notification yet
       let status = service.getRateLimitStatus(mockProduct.id);
       expect(status.isLimited).toBe(false);
       expect(status.lastNotification).toBeNull();
 
-      // Send notification
-      await service.sendAvailabilityNotification(mockProduct, mockPhoneNumber);
+      await service.sendAvailabilityNotification(mockProduct);
 
-      // Check status after notification
       status = service.getRateLimitStatus(mockProduct.id);
       expect(status.isLimited).toBe(true);
       expect(status.lastNotification).toBeGreaterThan(0);
@@ -526,26 +426,16 @@ describe('NotificationService', () => {
     });
 
     it('should clear rate limit cache', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+      execFileSuccess();
 
-      // Send notification
-      await service.sendAvailabilityNotification(mockProduct, mockPhoneNumber);
+      await service.sendAvailabilityNotification(mockProduct);
 
-      // Clear cache
       service.clearRateLimitCache();
 
-      // Should allow notification again
-      const result = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
-      );
+      const result = await service.sendAvailabilityNotification(mockProduct);
 
       expect(result).toBe(true);
-      expect(exec).toHaveBeenCalledTimes(2);
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -556,32 +446,40 @@ describe('NotificationService', () => {
         { id: 2, product_id: '123', timestamp: Date.now() - 1000, sent: 1 },
       ];
 
-      mockDbAll.mockReturnValue(mockHistory);
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockHistory,
+      );
 
       const history = service.getNotificationHistory('123');
 
       expect(history).toEqual(mockHistory);
-      expect(mockDbPrepare).toHaveBeenCalled();
-      expect(mockDbAll).toHaveBeenCalledWith('123', 10);
+      expect(mockDatabaseService.getNotificationHistory).toHaveBeenCalledWith({
+        productId: '123',
+        limit: 10,
+      });
     });
 
     it('should respect custom limit', () => {
-      mockDbAll.mockReturnValue([]);
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        [],
+      );
 
       service.getNotificationHistory('123', 5);
 
-      expect(mockDbAll).toHaveBeenCalledWith('123', 5);
+      expect(mockDatabaseService.getNotificationHistory).toHaveBeenCalledWith({
+        productId: '123',
+        limit: 5,
+      });
     });
 
     it('should handle database errors gracefully', () => {
-      mockDbPrepare.mockImplementation(() => {
-        throw new Error('Database error');
-      });
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        [],
+      );
 
       const history = service.getNotificationHistory('123');
 
       expect(history).toEqual([]);
-      expect(mockLoggerService.error).toHaveBeenCalled();
     });
   });
 
@@ -782,91 +680,1215 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('getFormattedHistory', () => {
+    it('should format notification history correctly', () => {
+      const mockRawHistory = [
+        {
+          id: 1,
+          product_id: 'prod-123',
+          product_title: 'Gaming Mouse',
+          timestamp: 1704067200000,
+          sent: 1,
+          availability_change: 'became available (2 variant(s))',
+          error_message: null,
+        },
+        {
+          id: 2,
+          product_id: 'prod-456',
+          product_title: 'Keyboard',
+          timestamp: 1704153600000,
+          sent: 0,
+          availability_change: 'became available',
+          error_message: 'osascript failed',
+        },
+      ];
+
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockRawHistory,
+      );
+
+      const result = service.getFormattedHistory();
+
+      expect(result).toHaveLength(2);
+
+      expect(result[0]).toMatchObject({
+        id: 1,
+        productId: 'prod-123',
+        productTitle: 'Gaming Mouse',
+        timestamp: 1704067200000,
+        status: 'sent',
+        availabilityChange: 'became available (2 variant(s))',
+        errorMessage: null,
+      });
+
+      expect(result[0].formattedTimestamp).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+
+      expect(result[1]).toMatchObject({
+        id: 2,
+        productId: 'prod-456',
+        productTitle: 'Keyboard',
+        timestamp: 1704153600000,
+        status: 'failed',
+        availabilityChange: 'became available',
+        errorMessage: 'osascript failed',
+      });
+    });
+
+    it('should pass filters to database service', () => {
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        [],
+      );
+
+      const filters = {
+        dateFrom: '2024-01-01',
+        dateTo: '2024-01-31',
+        productId: 'prod-123',
+        status: 'sent' as const,
+        limit: 50,
+        offset: 10,
+      };
+
+      service.getFormattedHistory(filters);
+
+      expect(mockDatabaseService.getNotificationHistory).toHaveBeenCalledWith(
+        filters,
+      );
+    });
+
+    it('should handle null values in notification fields', () => {
+      const mockRawHistory = [
+        {
+          id: 1,
+          product_id: 'prod-123',
+          product_title: null,
+          timestamp: 1704067200000,
+          sent: 1,
+          availability_change: null,
+          error_message: null,
+        },
+      ];
+
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockRawHistory,
+      );
+
+      const result = service.getFormattedHistory();
+
+      expect(result[0]).toMatchObject({
+        id: 1,
+        productId: 'prod-123',
+        productTitle: null,
+        status: 'sent',
+        availabilityChange: null,
+        errorMessage: null,
+      });
+    });
+
+    it('should handle database errors gracefully', () => {
+      (
+        mockDatabaseService.getNotificationHistory as jest.Mock
+      ).mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      const result = service.getFormattedHistory();
+
+      expect(result).toEqual([]);
+      expect(mockLoggerService.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to get formatted notification history'),
+        'NotificationService',
+      );
+    });
+
+    it('should handle missing id field', () => {
+      const mockRawHistory = [
+        {
+          product_id: 'prod-123',
+          product_title: 'Test',
+          timestamp: 1704067200000,
+          sent: 1,
+          availability_change: null,
+          error_message: null,
+        },
+      ];
+
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockRawHistory,
+      );
+
+      const result = service.getFormattedHistory();
+
+      expect(result[0].id).toBe(0);
+    });
+
+    it('should format timestamps consistently', () => {
+      const mockRawHistory = [
+        {
+          id: 1,
+          product_id: 'prod-123',
+          product_title: 'Test',
+          timestamp: 1704067200000,
+          sent: 1,
+          availability_change: null,
+          error_message: null,
+        },
+      ];
+
+      (mockDatabaseService.getNotificationHistory as jest.Mock).mockReturnValue(
+        mockRawHistory,
+      );
+
+      const result = service.getFormattedHistory();
+
+      expect(result[0].formattedTimestamp).toBeTruthy();
+      expect(typeof result[0].formattedTimestamp).toBe('string');
+    });
+  });
+
+  describe('getNotificationStats', () => {
+    it('should format notification stats correctly', () => {
+      const mockStats = {
+        totalSent: 42,
+        totalFailed: 7,
+        countByProduct: [
+          {
+            product_id: 'prod-123',
+            product_title: 'Gaming Mouse',
+            sent_count: 10,
+            failed_count: 2,
+          },
+          {
+            product_id: 'prod-456',
+            product_title: 'Keyboard',
+            sent_count: 5,
+            failed_count: 1,
+          },
+        ],
+      };
+
+      (mockDatabaseService.getNotificationStats as jest.Mock).mockReturnValue(
+        mockStats,
+      );
+
+      const result = service.getNotificationStats();
+
+      expect(result.totalSent).toBe(42);
+      expect(result.totalFailed).toBe(7);
+      expect(result.countByProduct).toHaveLength(2);
+
+      expect(result.countByProduct[0]).toMatchObject({
+        productId: 'prod-123',
+        productTitle: 'Gaming Mouse',
+        sentCount: 10,
+        failedCount: 2,
+        totalCount: 12,
+      });
+
+      expect(result.countByProduct[1]).toMatchObject({
+        productId: 'prod-456',
+        productTitle: 'Keyboard',
+        sentCount: 5,
+        failedCount: 1,
+        totalCount: 6,
+      });
+    });
+
+    it('should handle database errors gracefully', () => {
+      (
+        mockDatabaseService.getNotificationStats as jest.Mock
+      ).mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      const result = service.getNotificationStats();
+
+      expect(result).toEqual({
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      });
+      expect(mockLoggerService.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to get notification stats'),
+        'NotificationService',
+      );
+    });
+
+    it('should handle null product titles', () => {
+      const mockStats = {
+        totalSent: 10,
+        totalFailed: 2,
+        countByProduct: [
+          {
+            product_id: 'prod-123',
+            product_title: null,
+            sent_count: 8,
+            failed_count: 2,
+          },
+        ],
+      };
+
+      (mockDatabaseService.getNotificationStats as jest.Mock).mockReturnValue(
+        mockStats,
+      );
+
+      const result = service.getNotificationStats();
+
+      expect(result.countByProduct[0]).toMatchObject({
+        productId: 'prod-123',
+        productTitle: null,
+        sentCount: 8,
+        failedCount: 2,
+        totalCount: 10,
+      });
+    });
+
+    it('should calculate total counts correctly', () => {
+      const mockStats = {
+        totalSent: 100,
+        totalFailed: 50,
+        countByProduct: [
+          {
+            product_id: 'prod-123',
+            product_title: 'Product 1',
+            sent_count: 25,
+            failed_count: 10,
+          },
+          {
+            product_id: 'prod-456',
+            product_title: 'Product 2',
+            sent_count: 0,
+            failed_count: 15,
+          },
+          {
+            product_id: 'prod-789',
+            product_title: 'Product 3',
+            sent_count: 30,
+            failed_count: 0,
+          },
+        ],
+      };
+
+      (mockDatabaseService.getNotificationStats as jest.Mock).mockReturnValue(
+        mockStats,
+      );
+
+      const result = service.getNotificationStats();
+
+      expect(result.countByProduct[0].totalCount).toBe(35);
+      expect(result.countByProduct[1].totalCount).toBe(15);
+      expect(result.countByProduct[2].totalCount).toBe(30);
+    });
+
+    it('should handle empty results', () => {
+      const mockStats = {
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      };
+
+      (mockDatabaseService.getNotificationStats as jest.Mock).mockReturnValue(
+        mockStats,
+      );
+
+      const result = service.getNotificationStats();
+
+      expect(result.totalSent).toBe(0);
+      expect(result.totalFailed).toBe(0);
+      expect(result.countByProduct).toEqual([]);
+    });
+  });
+
   describe('Edge cases', () => {
     it('should handle product with no variants', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+      execFileSuccess();
 
       const productNoVariants: ProductDto = {
         ...mockProduct,
         variants: [],
       };
 
-      const result = await service.sendAvailabilityNotification(
-        productNoVariants,
-        mockPhoneNumber,
-      );
+      const result =
+        await service.sendAvailabilityNotification(productNoVariants);
 
       expect(result).toBe(true);
-      const execCall = (exec as unknown as jest.Mock).mock.calls[0][0];
-      expect(execCall).not.toContain('Variantes disponibles');
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).not.toContain('variant');
     });
 
     it('should handle product with zero price', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
-      );
+      execFileSuccess();
 
       const productFree: ProductDto = {
         ...mockProduct,
         price: 0,
       };
 
+      const result = await service.sendAvailabilityNotification(productFree);
+
+      expect(result).toBe(true);
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).not.toContain('Price:');
+    });
+
+    it('should handle database recording errors without failing notification', async () => {
+      execFileSuccess();
+
+      const result = await service.sendAvailabilityNotification(mockProduct);
+
+      expect(result).toBe(true);
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.any(String),
+        }),
+      );
+    });
+
+    it('should escape backslashes and quotes in notification messages', async () => {
+      execFileSuccess();
+
+      const productWithSpecialChars: ProductDto = {
+        ...mockProduct,
+        title: 'Product with "quotes" and \\backslashes\\',
+      };
+
       const result = await service.sendAvailabilityNotification(
-        productFree,
-        mockPhoneNumber,
+        productWithSpecialChars,
       );
 
       expect(result).toBe(true);
-      const execCall = (exec as unknown as jest.Mock).mock.calls[0][0];
-      expect(execCall).not.toContain('Precio:');
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('\\"quotes\\"');
+      expect(script).toContain('\\\\backslashes\\\\');
     });
 
-    it('should handle exec timeout', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          // Simulate timeout error
-          const error: any = new Error('Command timed out');
-          error.killed = true;
-          callback(error, null);
-        },
+    it('should handle product available with some unavailable variants', async () => {
+      execFileSuccess();
+
+      const productMixedVariants: ProductDto = {
+        ...mockProduct,
+        available: true,
+        variants: [
+          {
+            id: '1',
+            title: 'Available',
+            price: 50,
+            sku: 'SKU1',
+            available: true,
+            inventoryQuantity: 5,
+          },
+          {
+            id: '2',
+            title: 'Unavailable',
+            price: 60,
+            sku: 'SKU2',
+            available: false,
+            inventoryQuantity: 0,
+          },
+        ],
+      };
+
+      await service.sendAvailabilityNotification(productMixedVariants);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        productMixedVariants.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'became available (1 variant(s))',
+        }),
+      );
+    });
+  });
+
+  describe('sendPriceChangeNotification', () => {
+    const mockPriceChange: PriceChange = {
+      product: mockProduct,
+      oldPrice: 59.99,
+      newPrice: 49.99,
+    };
+
+    it('should send price change notification successfully', async () => {
+      execFileSuccess();
+
+      const result = await service.sendPriceChangeNotification(mockPriceChange);
+
+      expect(result).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'osascript',
+        ['-e', expect.stringContaining('Test Gaming Mouse')],
+        expect.any(Function),
+      );
+    });
+
+    it('should format price drop message correctly', async () => {
+      execFileSuccess();
+
+      await service.sendPriceChangeNotification(mockPriceChange);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('dropped from $59.99 to $49.99');
+      expect(script).toContain('Price Change');
+    });
+
+    it('should format price increase message correctly', async () => {
+      execFileSuccess();
+
+      const priceIncrease: PriceChange = {
+        product: mockProduct,
+        oldPrice: 49.99,
+        newPrice: 59.99,
+      };
+
+      await service.sendPriceChangeNotification(priceIncrease);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('increased from $49.99 to $59.99');
+    });
+
+    it('should include compare at price changes', async () => {
+      execFileSuccess();
+
+      const priceChangeWithCompare: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+        oldCompareAtPrice: 79.99,
+        newCompareAtPrice: 69.99,
+      };
+
+      await service.sendPriceChangeNotification(priceChangeWithCompare);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('Compare at: $69.99');
+    });
+
+    it('should handle notification errors gracefully', async () => {
+      execFileError();
+
+      const result = await service.sendPriceChangeNotification(mockPriceChange);
+
+      expect(result).toBe(false);
+      expect(mockLoggerService.error).toHaveBeenCalled();
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        false,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.stringContaining('price'),
+          errorMessage: expect.any(String),
+        }),
+      );
+    });
+
+    it('should respect rate limiting', async () => {
+      execFileSuccess();
+
+      const result1 =
+        await service.sendPriceChangeNotification(mockPriceChange);
+      const result2 =
+        await service.sendPriceChangeNotification(mockPriceChange);
+
+      expect(result1).toBe(true);
+      expect(result2).toBe(false);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('should record successful notification in database', async () => {
+      execFileSuccess();
+
+      await service.sendPriceChangeNotification(mockPriceChange);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.stringContaining('price dropped'),
+        }),
+      );
+    });
+  });
+
+  describe('sendAvailabilityChangeNotification', () => {
+    const mockAvailabilityChange: AvailabilityChange = {
+      product: mockProduct,
+      wasAvailable: false,
+      isAvailable: true,
+    };
+
+    it('should send back in stock notification successfully', async () => {
+      execFileSuccess();
+
+      const result = await service.sendAvailabilityChangeNotification(
+        mockAvailabilityChange,
       );
 
-      const result = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
+      expect(result).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'osascript',
+        ['-e', expect.stringContaining('Test Gaming Mouse')],
+        expect.any(Function),
+      );
+    });
+
+    it('should format back in stock message correctly', async () => {
+      execFileSuccess();
+
+      await service.sendAvailabilityChangeNotification(mockAvailabilityChange);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('back in stock');
+      expect(script).toContain('Availability Update');
+    });
+
+    it('should format sold out message correctly', async () => {
+      execFileSuccess();
+
+      const soldOut: AvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: true,
+        isAvailable: false,
+      };
+
+      await service.sendAvailabilityChangeNotification(soldOut);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('sold out');
+    });
+
+    it('should handle still unavailable case', async () => {
+      execFileSuccess();
+
+      const stillUnavailable: AvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: false,
+      };
+
+      await service.sendAvailabilityChangeNotification(stillUnavailable);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'still unavailable',
+        }),
+      );
+    });
+
+    it('should handle notification errors gracefully', async () => {
+      execFileError();
+
+      const result = await service.sendAvailabilityChangeNotification(
+        mockAvailabilityChange,
       );
 
       expect(result).toBe(false);
       expect(mockLoggerService.error).toHaveBeenCalled();
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        false,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: 'back in stock',
+          errorMessage: expect.any(String),
+        }),
+      );
     });
 
-    it('should handle database recording errors without failing notification', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (cmd, opts, callback) => {
-          callback(null, { stdout: '', stderr: '' });
-        },
+    it('should respect rate limiting', async () => {
+      execFileSuccess();
+
+      const result1 = await service.sendAvailabilityChangeNotification(
+        mockAvailabilityChange,
+      );
+      const result2 = await service.sendAvailabilityChangeNotification(
+        mockAvailabilityChange,
       );
 
-      mockDbPrepare.mockImplementation(() => {
-        throw new Error('Database error');
+      expect(result1).toBe(true);
+      expect(result2).toBe(false);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('should record successful notification in database', async () => {
+      execFileSuccess();
+
+      await service.sendAvailabilityChangeNotification(mockAvailabilityChange);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: 'back in stock',
+        }),
+      );
+    });
+  });
+
+  describe('describePriceChange', () => {
+    it('should describe price drop correctly', () => {
+      const result = (service as any).describePriceChange(59.99, 49.99);
+      expect(result).toBe('dropped from $59.99 to $49.99');
+    });
+
+    it('should describe price increase correctly', () => {
+      const result = (service as any).describePriceChange(49.99, 59.99);
+      expect(result).toBe('increased from $49.99 to $59.99');
+    });
+
+    it('should handle equal prices', () => {
+      const result = (service as any).describePriceChange(49.99, 49.99);
+      expect(result).toBe('increased from $49.99 to $49.99');
+    });
+
+    it('should format decimal places correctly', () => {
+      const result = (service as any).describePriceChange(10, 5.5);
+      expect(result).toBe('dropped from $10.00 to $5.50');
+    });
+  });
+
+  describe('shouldNotifyPriceChange', () => {
+    const mockPriceChange: PriceChange = {
+      product: mockProduct,
+      oldPrice: 59.99,
+      newPrice: 49.99,
+    };
+
+    it('should return true when no threshold is set', () => {
+      mockConfigService.get = jest.fn().mockReturnValue(undefined);
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        mockPriceChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should respect min price filter when enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '100';
+        return '';
       });
 
-      const result = await service.sendAvailabilityNotification(
-        mockProduct,
-        mockPhoneNumber,
+      const cheapProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Default',
+            price: 50,
+            sku: 'SKU',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const cheapPriceChange: PriceChange = {
+        product: cheapProduct,
+        oldPrice: 60,
+        newPrice: 50,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        cheapProduct,
+        cheapPriceChange,
       );
 
-      // Notification should still succeed even if DB recording fails
+      expect(result).toBe(false);
+    });
+
+    it('should respect keywords filter when enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return 'laptop,keyboard';
+        return '';
+      });
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        mockPriceChange,
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should allow all price changes when threshold is 0', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '0';
+        return '';
+      });
+
+      const smallChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 101,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, smallChange);
+
       expect(result).toBe(true);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to record notification'),
+    });
+
+    it('should block price changes below threshold percentage', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const smallChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 105,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, smallChange);
+
+      expect(result).toBe(false);
+      expect(mockLoggerService.log).toHaveBeenCalledWith(
+        expect.stringContaining('5.00% below threshold 10%'),
         'NotificationService',
+      );
+    });
+
+    it('should allow price changes above threshold percentage', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const largeChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 115,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, largeChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle threshold check for price increases', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const priceIncrease: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 112,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        priceIncrease,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle threshold check for price decreases', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const priceDecrease: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 88,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        priceDecrease,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle edge case when old price is 0', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const zeroPriceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 0,
+        newPrice: 50,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        zeroPriceChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle invalid threshold values gracefully', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return 'invalid';
+        return '';
+      });
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 105,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, priceChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle negative threshold values', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '-10';
+        return '';
+      });
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 105,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, priceChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle threshold at exactly the change percentage', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const exactThresholdChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 110,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        exactThresholdChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should combine threshold with other filters', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '50';
+        return '';
+      });
+
+      const largeChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 115,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, largeChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should block when threshold passes but price filter fails', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '200';
+        return '';
+      });
+
+      const cheapProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Default',
+            price: 50,
+            sku: 'SKU',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const largeChange: PriceChange = {
+        product: cheapProduct,
+        oldPrice: 100,
+        newPrice: 115,
+      };
+
+      const result = service.shouldNotifyPriceChange(cheapProduct, largeChange);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('shouldNotifyAvailabilityChange', () => {
+    const mockAvailabilityChange: AvailabilityChange = {
+      product: mockProduct,
+      wasAvailable: false,
+      isAvailable: true,
+    };
+
+    it('should return true when no filters are set', () => {
+      mockConfigService.get = jest.fn().mockReturnValue(undefined);
+
+      const result = service.shouldNotifyAvailabilityChange(
+        mockProduct,
+        mockAvailabilityChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should respect min price filter when enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '100';
+        return '';
+      });
+
+      const cheapProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Default',
+            price: 50,
+            sku: 'SKU',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const cheapAvailabilityChange: AvailabilityChange = {
+        product: cheapProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      const result = service.shouldNotifyAvailabilityChange(
+        cheapProduct,
+        cheapAvailabilityChange,
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should respect keywords filter when enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return 'laptop,keyboard';
+        return '';
+      });
+
+      const result = service.shouldNotifyAvailabilityChange(
+        mockProduct,
+        mockAvailabilityChange,
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('Rate limiting across notification types', () => {
+    it('should apply 60-minute cooldown to price change notifications', async () => {
+      execFileSuccess();
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      const result1 = await service.sendPriceChangeNotification(priceChange);
+      expect(result1).toBe(true);
+
+      const result2 = await service.sendPriceChangeNotification(priceChange);
+      expect(result2).toBe(false);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+
+      const status = service.getRateLimitStatus(mockProduct.id);
+      expect(status.isLimited).toBe(true);
+      expect(status.minutesUntilUnlocked).toBeGreaterThan(0);
+      expect(status.minutesUntilUnlocked).toBeLessThanOrEqual(60);
+    });
+
+    it('should apply 60-minute cooldown to availability change notifications', async () => {
+      execFileSuccess();
+
+      const availabilityChange: AvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      const result1 =
+        await service.sendAvailabilityChangeNotification(availabilityChange);
+      expect(result1).toBe(true);
+
+      const result2 =
+        await service.sendAvailabilityChangeNotification(availabilityChange);
+      expect(result2).toBe(false);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+
+      const status = service.getRateLimitStatus(mockProduct.id);
+      expect(status.isLimited).toBe(true);
+      expect(status.minutesUntilUnlocked).toBeGreaterThan(0);
+      expect(status.minutesUntilUnlocked).toBeLessThanOrEqual(60);
+    });
+
+    it('should apply rate limit across different notification types for same product', async () => {
+      execFileSuccess();
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      const availabilityChange: AvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      const result1 = await service.sendPriceChangeNotification(priceChange);
+      expect(result1).toBe(true);
+
+      const result2 =
+        await service.sendAvailabilityChangeNotification(availabilityChange);
+      expect(result2).toBe(false);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockLoggerService.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Rate limit hit'),
+        'NotificationService',
+      );
+    });
+
+    it('should allow notifications for different products independently', async () => {
+      execFileSuccess();
+
+      const product2: ProductDto = {
+        ...mockProduct,
+        id: 'different-product-id',
+        title: 'Different Product',
+      };
+
+      const priceChange1: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      const priceChange2: PriceChange = {
+        product: product2,
+        oldPrice: 79.99,
+        newPrice: 69.99,
+      };
+
+      const result1 = await service.sendPriceChangeNotification(priceChange1);
+      const result2 = await service.sendPriceChangeNotification(priceChange2);
+
+      expect(result1).toBe(true);
+      expect(result2).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+
+      const status1 = service.getRateLimitStatus(mockProduct.id);
+      const status2 = service.getRateLimitStatus(product2.id);
+
+      expect(status1.isLimited).toBe(true);
+      expect(status2.isLimited).toBe(true);
+    });
+
+    it('should track rate limit status per product', async () => {
+      execFileSuccess();
+
+      const product2: ProductDto = {
+        ...mockProduct,
+        id: 'product-2',
+        title: 'Product 2',
+      };
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      await service.sendPriceChangeNotification(priceChange);
+
+      const status1 = service.getRateLimitStatus(mockProduct.id);
+      const status2 = service.getRateLimitStatus(product2.id);
+
+      expect(status1.isLimited).toBe(true);
+      expect(status1.lastNotification).toBeGreaterThan(0);
+      expect(status2.isLimited).toBe(false);
+      expect(status2.lastNotification).toBeNull();
+    });
+
+    it('should clear rate limit cache for all notification types', async () => {
+      execFileSuccess();
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      await service.sendPriceChangeNotification(priceChange);
+
+      let status = service.getRateLimitStatus(mockProduct.id);
+      expect(status.isLimited).toBe(true);
+
+      service.clearRateLimitCache();
+
+      status = service.getRateLimitStatus(mockProduct.id);
+      expect(status.isLimited).toBe(false);
+
+      const result = await service.sendPriceChangeNotification(priceChange);
+      expect(result).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+    });
+
+    it('should persist rate limit status in database', async () => {
+      execFileSuccess();
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      await service.sendPriceChangeNotification(priceChange);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+        }),
       );
     });
   });

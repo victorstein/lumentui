@@ -7,11 +7,16 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as ipc from 'node-ipc';
+import * as ipcModule from 'node-ipc';
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const ipc = (ipcModule as any).default || ipcModule;
 import { existsSync, unlinkSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { ProductDto } from '../api/dto/product.dto';
+import { PathsUtil } from '../../common/utils/paths.util';
+import { NotificationService } from '../notification/notification.service';
+import { PriceChange, AvailabilityChange } from '../differ/differ.service';
 
 const execAsync = promisify(exec);
 
@@ -25,11 +30,20 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   private readonly socketPath: string;
   private isServerRunning = false;
   private schedulerService: any;
+  private readonly LOG_BUFFER_SIZE = 100;
+  private logBuffer: Array<{
+    level: string;
+    message: string;
+    timestamp: number;
+  }> = [];
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
+  ) {
     this.socketPath = this.configService.get<string>(
       'IPC_SOCKET_PATH',
-      '/tmp/lumentui.sock',
+      PathsUtil.getIpcSocketPath(),
     );
   }
 
@@ -40,6 +54,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
     @Inject(forwardRef(() => 'SchedulerService'))
     schedulerService: any,
   ): void {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     this.schedulerService = schedulerService;
   }
 
@@ -64,15 +79,20 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
     await this.cleanupStaleSocket();
 
     // Configure node-ipc
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     ipc.config.id = 'lumentui-daemon';
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     ipc.config.retry = 1500;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     ipc.config.silent = true; // Disable internal logging
 
     // Start server
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.serve(this.socketPath, () => {
       this.setupEventHandlers();
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.start();
     this.isServerRunning = true;
 
@@ -91,43 +111,38 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log('Socket file exists, checking if stale...');
 
+    // Check if any process is listening on this socket using lsof
+    // lsof returns exit code 0 if file is open, non-zero if not
+    let socketInUse = false;
     try {
-      // Check if any process is listening on this socket using lsof
-      // lsof returns exit code 0 if file is open, non-zero if not
       await execAsync(`lsof ${this.socketPath}`);
+      socketInUse = true;
+    } catch {
+      // lsof returns non-zero exit code when socket is not in use
+      socketInUse = false;
+    }
 
-      // If we reach here, the socket is in use by another process
+    if (socketInUse) {
       this.logger.warn(
         'Socket file is in use by another process. Cannot start server.',
       );
       throw new Error(
         `IPC socket ${this.socketPath} is already in use by another process`,
       );
-    } catch (error: any) {
-      // lsof returns non-zero exit code if socket is not in use
-      // This means the socket file is stale (no process listening)
-      if (error.code === 1 || error.message?.includes('No such')) {
-        this.logger.log('Removing stale socket file');
-        try {
-          unlinkSync(this.socketPath);
-          this.logger.log('Stale socket file removed successfully');
-        } catch (unlinkError) {
-          this.logger.error(
-            `Failed to remove stale socket file: ${unlinkError.message}`,
-          );
-          throw unlinkError;
-        }
-      } else {
-        // Some other error occurred (e.g., lsof not found, permission denied)
-        this.logger.error(`Error checking socket status: ${error.message}`);
-        // Attempt to remove socket anyway
-        try {
-          unlinkSync(this.socketPath);
-          this.logger.log('Socket file removed (lsof check failed)');
-        } catch {
-          // Ignore if removal fails
-        }
-      }
+    }
+
+    // Socket file is stale (no process listening), remove it
+    this.logger.log('Removing stale socket file');
+    try {
+      unlinkSync(this.socketPath);
+      this.logger.log('Stale socket file removed successfully');
+    } catch (unlinkError: unknown) {
+      const unlinkErrorMessage =
+        unlinkError instanceof Error ? unlinkError.message : 'Unknown error';
+      this.logger.error(
+        `Failed to remove stale socket file: ${unlinkErrorMessage}`,
+      );
+      throw unlinkError;
     }
   }
 
@@ -139,39 +154,61 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // Stop accepting new connections but keep socket file until process exits.
+    // node-ipc's stop() already removes the socket file, so we just mark state.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.stop();
     this.isServerRunning = false;
 
-    // Clean up socket file on graceful shutdown
+    this.logger.log('IPC server stopped');
+  }
+
+  /**
+   * Clean up socket file. Called externally after full shutdown completes.
+   */
+  cleanupSocket(): void {
     if (existsSync(this.socketPath)) {
       try {
         unlinkSync(this.socketPath);
         this.logger.log('Socket file cleaned up');
-      } catch (error: any) {
-        this.logger.warn(`Failed to clean up socket file: ${error.message}`);
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        this.logger.warn(`Failed to clean up socket file: ${errorMessage}`);
       }
     }
-
-    this.logger.log('IPC server stopped');
   }
 
   /**
    * Setup event handlers for client connections
    */
   private setupEventHandlers(): void {
-    ipc.server.on('connect', (socket: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on('connect', (socket: unknown) => {
       this.logger.log('TUI client connected');
+      // Send immediate heartbeat so TUI transitions from "Connecting..." to "Connected"
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      ipc.server.emit(socket, 'daemon:heartbeat', { timestamp: Date.now() });
+
+      // Send log history to newly connected client
+      for (const logEntry of this.logBuffer) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        ipc.server.emit(socket, 'log', logEntry);
+      }
     });
 
-    ipc.server.on('disconnect', (socket: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on('disconnect', () => {
       this.logger.log('TUI client disconnected');
     });
 
     // Listen for force-poll event from client
-    ipc.server.on('force-poll', async (data: any, socket: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on('force-poll', async (_data: unknown, socket: unknown) => {
       this.logger.log('Force poll requested by client');
 
       // Acknowledge receipt
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       ipc.server.emit(socket, 'force-poll-received', {
         timestamp: Date.now(),
       });
@@ -179,27 +216,37 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       // Execute force poll via SchedulerService
       if (this.schedulerService) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
           const result = await this.schedulerService.forcePoll();
 
           // Emit result back to client
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.server.emit(socket, 'force-poll-result', {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             success: result.success,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             productCount: result.productCount,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             newProducts: result.newProducts,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             durationMs: result.durationMs,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             error: result.error,
             timestamp: Date.now(),
           });
 
           this.logger.log(
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             `Force poll completed: ${result.success ? 'success' : 'failed'}`,
           );
-        } catch (error) {
+        } catch (error: unknown) {
           const errorMessage =
             error instanceof Error ? error.message : 'Unknown error';
-          this.logger.error(`Force poll failed: ${errorMessage}`, error.stack);
+          const errorStack = error instanceof Error ? error.stack : undefined;
+          this.logger.error(`Force poll failed: ${errorMessage}`, errorStack);
 
           // Emit error back to client
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           ipc.server.emit(socket, 'force-poll-result', {
             success: false,
             productCount: 0,
@@ -213,6 +260,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
         this.logger.warn('SchedulerService not available, cannot force poll');
 
         // Emit error back to client
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ipc.server.emit(socket, 'force-poll-result', {
           success: false,
           productCount: 0,
@@ -224,9 +272,153 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       }
     });
 
+    // Listen for getNotificationHistory event from client
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on(
+      'getNotificationHistory',
+      (data: unknown, socket: unknown) => {
+        this.logger.log('Notification history requested by client');
+
+        try {
+          // Parse and validate filters
+          const filters = this.parseNotificationFilters(data);
+
+          // Get formatted history from NotificationService
+          const history = this.notificationService.getFormattedHistory(filters);
+
+          // Emit result back to client
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          ipc.server.emit(socket, 'getNotificationHistory-result', {
+            success: true,
+            history,
+            count: history.length,
+            timestamp: Date.now(),
+          });
+
+          this.logger.log(
+            `Notification history sent: ${history.length} entries`,
+          );
+        } catch (error: unknown) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error';
+          const errorStack = error instanceof Error ? error.stack : undefined;
+          this.logger.error(
+            `Failed to get notification history: ${errorMessage}`,
+            errorStack,
+          );
+
+          // Emit error back to client
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          ipc.server.emit(socket, 'getNotificationHistory-result', {
+            success: false,
+            history: [],
+            count: 0,
+            error: errorMessage,
+            timestamp: Date.now(),
+          });
+        }
+      },
+    );
+
+    // Listen for getNotificationStats event from client
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.on('getNotificationStats', (_data: unknown, socket: unknown) => {
+      this.logger.log('Notification stats requested by client');
+
+      try {
+        // Get statistics from NotificationService
+        const stats = this.notificationService.getNotificationStats();
+
+        // Emit result back to client
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        ipc.server.emit(socket, 'getNotificationStats-result', {
+          success: true,
+          stats,
+          timestamp: Date.now(),
+        });
+
+        this.logger.log(
+          `Notification stats sent: ${stats.totalSent} sent, ${stats.totalFailed} failed`,
+        );
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        this.logger.error(
+          `Failed to get notification stats: ${errorMessage}`,
+          errorStack,
+        );
+
+        // Emit error back to client
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        ipc.server.emit(socket, 'getNotificationStats-result', {
+          success: false,
+          stats: {
+            totalSent: 0,
+            totalFailed: 0,
+            countByProduct: [],
+          },
+          error: errorMessage,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.on('error', (error: Error) => {
       this.logger.error(`IPC server error: ${error.message}`, error.stack);
     });
+  }
+
+  /**
+   * Parse and validate notification history filters from IPC data
+   */
+  private parseNotificationFilters(data: unknown): {
+    dateFrom?: string;
+    dateTo?: string;
+    productId?: string;
+    status?: 'sent' | 'failed';
+    limit?: number;
+    offset?: number;
+  } {
+    const filters: {
+      dateFrom?: string;
+      dateTo?: string;
+      productId?: string;
+      status?: 'sent' | 'failed';
+      limit?: number;
+      offset?: number;
+    } = {};
+
+    if (typeof data === 'object' && data !== null) {
+      const rawData = data as Record<string, unknown>;
+
+      if (typeof rawData.dateFrom === 'string') {
+        filters.dateFrom = rawData.dateFrom;
+      }
+
+      if (typeof rawData.dateTo === 'string') {
+        filters.dateTo = rawData.dateTo;
+      }
+
+      if (typeof rawData.productId === 'string') {
+        filters.productId = rawData.productId;
+      }
+
+      if (rawData.status === 'sent' || rawData.status === 'failed') {
+        filters.status = rawData.status;
+      }
+
+      if (typeof rawData.limit === 'number' && rawData.limit > 0) {
+        filters.limit = rawData.limit;
+      }
+
+      if (typeof rawData.offset === 'number' && rawData.offset >= 0) {
+        filters.offset = rawData.offset;
+      }
+    }
+
+    return filters;
   }
 
   /**
@@ -238,6 +430,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('daemon:heartbeat', {
       timestamp,
     });
@@ -254,6 +447,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('products:updated', {
       products,
       count: products.length,
@@ -272,6 +466,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('product:new', {
       product,
       timestamp: Date.now(),
@@ -289,6 +484,7 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ipc.server.broadcast('daemon:error', {
       error,
       timestamp: Date.now(),
@@ -306,13 +502,61 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    ipc.server.broadcast('log', {
-      level,
-      message,
+    const logEntry = { level, message, timestamp: Date.now() };
+
+    this.logBuffer.push(logEntry);
+    if (this.logBuffer.length > this.LOG_BUFFER_SIZE) {
+      this.logBuffer.shift();
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.broadcast('log', logEntry);
+
+    this.logger.debug(`Log emitted: [${level}] ${message}`);
+  }
+
+  /**
+   * Emit product price change event to all connected clients
+   * Should be called when a product price or compareAtPrice changes
+   */
+  emitProductPriceChanged(priceChange: PriceChange): void {
+    if (!this.isServerRunning) {
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.broadcast('product:price-changed', {
+      product: priceChange.product,
+      oldPrice: priceChange.oldPrice,
+      newPrice: priceChange.newPrice,
+      oldCompareAtPrice: priceChange.oldCompareAtPrice,
+      newCompareAtPrice: priceChange.newCompareAtPrice,
       timestamp: Date.now(),
     });
 
-    this.logger.debug(`Log emitted: [${level}] ${message}`);
+    this.logger.debug(`Price change emitted: ${priceChange.product.title}`);
+  }
+
+  /**
+   * Emit product availability change event to all connected clients
+   * Should be called when a product becomes available or unavailable
+   */
+  emitProductAvailabilityChanged(availabilityChange: AvailabilityChange): void {
+    if (!this.isServerRunning) {
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.broadcast('product:availability-changed', {
+      product: availabilityChange.product,
+      wasAvailable: availabilityChange.wasAvailable,
+      isAvailable: availabilityChange.isAvailable,
+      timestamp: Date.now(),
+    });
+
+    this.logger.debug(
+      `Availability change emitted: ${availabilityChange.product.title}`,
+    );
   }
 
   /**

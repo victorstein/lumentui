@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+} from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { machineIdSync } from 'node-machine-id';
@@ -95,31 +101,40 @@ export class CookieStorageService {
     }
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const stored = JSON.parse(readFileSync(this.COOKIE_FILE, 'utf8'));
       const key = this.getEncryptionKey();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       const iv = Buffer.from(stored.iv, 'hex');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       const authTag = Buffer.from(stored.authTag, 'hex');
 
       const decipher = createDecipheriv(this.ALGORITHM, key, iv);
       decipher.setAuthTag(authTag);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       let decrypted = decipher.update(stored.data, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
 
       // Check if this is the new format (v2) or old format (v1)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const parsed = JSON.parse(decrypted);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (parsed.version === this.STORAGE_VERSION) {
         // New format with full Cookie objects
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         return parsed.cookies as Cookie[];
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       } else if (typeof parsed === 'string' || !parsed.version) {
         // Old format (v1): just a cookie header string
         // Return null to force re-authentication
         return null;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       return parsed.cookies as Cookie[];
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -135,5 +150,17 @@ export class CookieStorageService {
     }
 
     return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+  }
+
+  /**
+   * Delete stored cookies
+   * Returns true if cookies were deleted, false if none existed
+   */
+  clearCookies(): boolean {
+    if (!existsSync(this.COOKIE_FILE)) {
+      return false;
+    }
+    unlinkSync(this.COOKIE_FILE);
+    return true;
   }
 }

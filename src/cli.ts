@@ -4,12 +4,24 @@ import { Command } from 'commander';
 import { NestFactory } from '@nestjs/core';
 import { spawn } from 'child_process';
 import { AuthService } from './modules/auth/auth.service';
-import { AppModule } from './app.module';
+import { ShopifyService } from './modules/api/shopify/shopify.service';
+import { CliModule } from './cli.module';
 import { PidManager } from './common/utils/pid.util';
 import { IpcClient } from './common/utils/ipc-client.util';
 import { DatabaseService } from './modules/storage/database/database.service';
+import { PathsUtil } from './common/utils/paths.util';
 import * as path from 'path';
 import * as fs from 'fs';
+
+// Suppress console logs in CLI mode (logs still go to file)
+process.env.LUMENTUI_CLI_MODE = '1';
+
+// Helper: force real ESM import() from CJS context.
+// TypeScript compiles `await import('x')` to `require('x')` in CommonJS,
+// which fails for ESM-only packages like Ink 5. This bypasses that.
+const esmImport = (specifier: string) =>
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+  new Function('s', 'return import(s)')(specifier);
 
 const program = new Command();
 
@@ -17,46 +29,6 @@ const program = new Command();
  * Validation helpers
  */
 class CliValidator {
-  /**
-   * Validate phone number format (E.164)
-   * @param phone Phone number string
-   * @returns true if valid, error message if invalid
-   */
-  static validatePhoneNumber(phone: string): {
-    valid: boolean;
-    error?: string;
-  } {
-    if (!phone) {
-      return { valid: true }; // Optional field
-    }
-
-    if (!phone.startsWith('+')) {
-      return {
-        valid: false,
-        error:
-          'Phone number must start with + (E.164 format, e.g., +50586826131)',
-      };
-    }
-
-    // Remove + and check if remaining chars are digits
-    const digits = phone.slice(1);
-    if (!/^\d+$/.test(digits)) {
-      return {
-        valid: false,
-        error: 'Phone number must contain only digits after + symbol',
-      };
-    }
-
-    if (digits.length < 7 || digits.length > 15) {
-      return {
-        valid: false,
-        error: 'Phone number must be between 7 and 15 digits',
-      };
-    }
-
-    return { valid: true };
-  }
-
   /**
    * Validate numeric environment variable
    * @param value String value from env
@@ -146,19 +118,76 @@ class CliValidator {
   }
 
   /**
+   * Validate positive integer
+   * @param value String value to validate
+   * @param name Field name for error messages
+   */
+  static validatePositiveInteger(
+    value: string | undefined,
+    name: string,
+  ): { valid: boolean; error?: string } {
+    if (!value) {
+      return {
+        valid: false,
+        error: `${name} is required`,
+      };
+    }
+
+    const num = parseInt(value, 10);
+    if (isNaN(num)) {
+      return {
+        valid: false,
+        error: `${name} must be a valid number (got: "${value}")`,
+      };
+    }
+
+    if (num < 1) {
+      return {
+        valid: false,
+        error: `${name} must be a positive integer (got: ${num})`,
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate enum value
+   * @param value String value to validate
+   * @param name Field name for error messages
+   * @param allowedValues Array of allowed values
+   * @param caseSensitive Whether comparison is case-sensitive (default: true)
+   */
+  static validateEnum(
+    value: string | undefined,
+    name: string,
+    allowedValues: string[],
+    caseSensitive: boolean = true,
+  ): { valid: boolean; error?: string } {
+    if (!value) {
+      return { valid: true }; // Optional field
+    }
+
+    const compareValue = caseSensitive ? value : value.toLowerCase();
+    const compareAllowed = caseSensitive
+      ? allowedValues
+      : allowedValues.map((v) => v.toLowerCase());
+
+    if (!compareAllowed.includes(compareValue)) {
+      return {
+        valid: false,
+        error: `${name} must be one of: ${allowedValues.join(', ')} (got: "${value}")`,
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
    * Validate configuration from environment variables
    */
   static validateEnvironment(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
-
-    // Validate phone number
-    const phoneNumber = process.env.NOTIFICATION_PHONE;
-    if (phoneNumber) {
-      const phoneResult = this.validatePhoneNumber(phoneNumber);
-      if (!phoneResult.valid) {
-        errors.push(`NOTIFICATION_PHONE: ${phoneResult.error}`);
-      }
-    }
 
     // Validate poll interval
     const pollInterval = process.env.LUMENTUI_POLL_INTERVAL;
@@ -214,57 +243,82 @@ class CliValidator {
 program
   .name('lumentui')
   .description('🌟 LumenTUI - Monitor shop.lumenalta.com for new products')
-  .version('0.1.0');
+  .version(PathsUtil.getVersion());
 
 /**
- * Command: lumentui auth
+ * Command: lumentui login
  * Extract cookies from Chrome Keychain and validate
  */
 program
-  .command('auth')
+  .command('login')
+  .alias('auth')
   .description('Authenticate with shop.lumenalta.com')
   .option('--check', 'Verify current session')
-  .action(async (options) => {
+  .action(async (options: { check?: boolean }) => {
     try {
       // Bootstrap NestJS app to get AuthService
-      const app = await NestFactory.createApplicationContext(AppModule, {
-        logger: ['error', 'warn'],
+      const app = await NestFactory.createApplicationContext(CliModule, {
+        logger: false,
       });
 
       const authService = app.get(AuthService);
+      const shopifyService = app.get(ShopifyService);
 
       if (options.check) {
-        // Check if cookies exist and are valid
-        const isValid = await authService.validateCookies();
-
-        if (isValid) {
+        // Check if cookies exist and actually work
+        try {
+          await shopifyService.getProducts();
           console.log('✅ Session is valid');
           process.exit(0);
-        } else {
-          console.log('❌ No valid session. Run: lumentui auth');
+        } catch {
+          console.log('❌ No valid session. Run: lumentui login');
           process.exit(1);
         }
       } else {
-        // Extract cookies from Chrome Keychain
-        console.log('🔐 Extracting cookies from Chrome...');
-        console.log(
-          '⚠️  macOS will ask for Keychain permission (first time only)',
+        const url = 'https://shop.lumenalta.com';
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
+        const { execSync } = require('child_process');
+
+        // Render Ink AuthFlow component (ESM dynamic import)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const React = await esmImport('react');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const { render } = await esmImport('ink');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const AuthFlowModule = await esmImport(
+          path.resolve(__dirname, 'ui/components/AuthFlow.js'),
         );
 
-        const cookies = await authService.extractCookies(
-          'https://shop.lumenalta.com',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        render(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          React.createElement(AuthFlowModule.AuthFlow, {
+            extractCookies: () => authService.extractCookies(url),
+
+            saveCookies: (cookies: unknown) =>
+              authService.saveCookies(
+                cookies as import('./modules/auth/interfaces/cookie.interface').Cookie[],
+              ),
+
+            testSession: async () => {
+              try {
+                await shopifyService.getProducts();
+                return true;
+              } catch {
+                return false;
+              }
+            },
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+            openBrowser: () => execSync(`open "${url}"`),
+          }),
         );
-
-        // Save cookies
-        await authService.saveCookies(cookies);
-
-        console.log('✅ Authentication successful!');
-        console.log('You can now use: lumentui start');
       }
 
       await app.close();
-    } catch (error) {
-      console.error('❌ Authentication failed:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Authentication failed:', errorMessage);
       process.exit(1);
     }
   });
@@ -277,113 +331,62 @@ program
   .command('start')
   .description('Start daemon and TUI')
   .option('--daemon-only', 'Start only daemon (no TUI)')
-  .action(async (options) => {
+  .action(async (options: { daemonOnly?: boolean }) => {
     try {
-      // Validate environment configuration
-      console.log('🔍 Validating configuration...');
-      const validationResult = CliValidator.validateEnvironment();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const React = await esmImport('react');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const { render } = await esmImport('ink');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const StartFlowModule = await esmImport(
+        path.resolve(__dirname, 'ui/components/StartFlow.js'),
+      );
 
-      if (!validationResult.valid) {
-        console.error('❌ Configuration validation failed:\n');
-        validationResult.errors.forEach((error) => {
-          console.error(`  • ${error}`);
-        });
-        console.error(
-          '\nPlease fix the above errors in your .env file and try again.',
-        );
-        process.exit(1);
-      }
-
-      // Check if daemon is already running
-      const status = PidManager.getDaemonStatus();
-      if (status.isRunning) {
-        console.log(`❌ Daemon is already running (PID: ${status.pid})`);
-        console.log('Use "lumentui stop" to stop it first');
-        process.exit(1);
-      }
-
-      // Ensure data directory exists
-      PidManager.ensureDataDir();
-
-      // Path to compiled daemon
-      const daemonPath = path.join(process.cwd(), 'dist', 'main.js');
-
-      const daemonPathResult = CliValidator.validateFilePath(daemonPath, {
-        shouldExist: true,
-        name: 'Daemon binary',
-      });
-      if (!daemonPathResult.valid) {
-        console.error(`❌ ${daemonPathResult.error}`);
-        console.error('Run: npm run build');
-        process.exit(1);
-      }
-
-      console.log('🚀 Starting daemon...');
-
-      // Fork daemon process
-      const daemon = spawn('node', [daemonPath], {
-        detached: true,
-        stdio: options.daemonOnly ? 'ignore' : 'pipe',
-        env: process.env,
-      });
-
-      // Unref so parent can exit
-      daemon.unref();
-
-      // Save PID
-      PidManager.savePid(daemon.pid!);
-
-      console.log(`✅ Daemon started (PID: ${daemon.pid})`);
-
-      // Wait for IPC to be ready
-      console.log('⏳ Waiting for daemon to be ready...');
-      const isReady = await IpcClient.waitForDaemon(5000);
-
-      if (!isReady) {
-        console.warn('⚠️  Daemon started but IPC not responding');
-        console.log('Check logs at: data/logs/');
-        if (!options.daemonOnly) {
-          process.exit(1);
-        }
-      } else {
-        console.log('✅ Daemon is ready');
-      }
-
-      // Launch TUI if not daemon-only
-      if (!options.daemonOnly) {
-        console.log('\n📺 Launching TUI...\n');
-
-        // Check if TUI exists
-        const tuiPath = path.join(process.cwd(), 'dist', 'ui', 'App.js');
-        if (!fs.existsSync(tuiPath)) {
-          console.warn('⚠️  TUI not built yet. Run: npm run build');
-          console.log('Daemon is running in background.');
-          console.log('Use "lumentui status" to check status');
-          process.exit(0);
-        }
-
-        // Launch TUI (Phase 8 complete!)
-        try {
-          // @ts-ignore - Dynamic ESM import
-          const { render } = await import('ink');
-          // @ts-ignore - Dynamic ESM import
-          const React = await import('react');
-          // @ts-ignore - Dynamic import of built TUI
-          const App = await import('./ui/App.js');
-
-          // Render the TUI
-          render(React.createElement(App.default));
-        } catch (tuiError: any) {
-          console.error('❌ Failed to launch TUI:', tuiError.message);
-          console.log('Daemon is still running in background.');
-          console.log('Use "lumentui stop" to stop the daemon');
-          process.exit(1);
-        }
-      } else {
-        process.exit(0);
-      }
-    } catch (error) {
-      console.error('❌ Failed to start daemon:', error.message);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      render(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        React.createElement(StartFlowModule.StartFlow, {
+          daemonOnly: !!options.daemonOnly,
+          validateConfig: () => CliValidator.validateEnvironment(),
+          getDaemonStatus: () => PidManager.getDaemonStatus(),
+          ensureDataDir: () => PidManager.ensureDataDir(),
+          getDaemonPath: () => {
+            const daemonPath = PathsUtil.getDaemonPath();
+            const result = CliValidator.validateFilePath(daemonPath, {
+              shouldExist: true,
+              name: 'Daemon binary',
+            });
+            return {
+              valid: result.valid,
+              path: daemonPath,
+              error: result.error,
+            };
+          },
+          spawnDaemon: (daemonPath: string) => {
+            const daemon = spawn('node', [daemonPath], {
+              detached: true,
+              stdio: 'ignore',
+              env: process.env,
+            });
+            daemon.unref();
+            PidManager.savePid(daemon.pid!);
+            return { pid: daemon.pid! };
+          },
+          waitForDaemon: () => IpcClient.waitForDaemon(5000),
+          launchTui: async () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            const AppModule = await esmImport(
+              path.resolve(__dirname, 'ui/App.js'),
+            );
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            render(React.createElement(AppModule.default));
+          },
+        }),
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to start:', errorMessage);
       process.exit(1);
     }
   });
@@ -396,7 +399,7 @@ program
   .command('stop')
   .description('Stop daemon')
   .option('--force', 'Force kill daemon (SIGKILL)')
-  .action(async (options) => {
+  .action(async (options: { force?: boolean }) => {
     try {
       const status = PidManager.getDaemonStatus();
 
@@ -432,8 +435,39 @@ program
 
       console.log('✅ Daemon stopped');
       process.exit(0);
-    } catch (error) {
-      console.error('❌ Failed to stop daemon:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to stop daemon:', errorMessage);
+      process.exit(1);
+    }
+  });
+
+/**
+ * Command: lumentui logout
+ * Clear stored authentication cookies
+ */
+program
+  .command('logout')
+  .description('Clear stored authentication cookies')
+  .action(async () => {
+    try {
+      const app = await NestFactory.createApplicationContext(CliModule, {
+        logger: false,
+      });
+      const authService = app.get(AuthService);
+      const cleared = authService.logout();
+
+      if (cleared) {
+        console.log('✅ Logged out successfully. Cookies cleared.');
+      } else {
+        console.log('ℹ️  No stored cookies found.');
+      }
+      process.exit(0);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Logout failed:', errorMessage);
       process.exit(1);
     }
   });
@@ -447,59 +481,69 @@ program
   .description('Check daemon status')
   .action(async () => {
     try {
-      const status = PidManager.getDaemonStatus();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const React = await esmImport('react');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const { render } = await esmImport('ink');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const StatusViewModule = await esmImport(
+        path.resolve(__dirname, 'ui/components/StatusView.js'),
+      );
 
-      console.log('\n🌟 LumenTUI Status\n');
-      console.log(`Daemon: ${status.isRunning ? '🟢 Running' : '🔴 Stopped'}`);
+      const daemonStatus = PidManager.getDaemonStatus();
+      let ipcReachable: boolean | null = null;
+      let lastPoll: unknown = null;
 
-      if (status.isRunning) {
-        console.log(`PID: ${status.pid}`);
+      // Render initial loading state
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      const { rerender } = render(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        React.createElement(StatusViewModule.StatusView, {
+          daemonStatus,
+          ipcReachable: daemonStatus.isRunning ? null : false,
+          lastPoll: null,
+          loading: daemonStatus.isRunning,
+        }),
+      );
 
-        // Check IPC connection
-        const ipcReachable = await IpcClient.isDaemonReachable();
-        console.log(
-          `IPC: ${ipcReachable ? '🟢 Connected' : '🔴 Not responding'}`,
-        );
+      if (daemonStatus.isRunning) {
+        // Check IPC
+        ipcReachable = await IpcClient.isDaemonReachable();
 
-        // Get poll information
+        // Fetch poll data
         try {
-          const app = await NestFactory.createApplicationContext(AppModule, {
-            logger: false,
-          });
-
-          const dbService = app.get(DatabaseService);
+          const nestApp = await NestFactory.createApplicationContext(
+            CliModule,
+            { logger: false },
+          );
+          const dbService = nestApp.get(DatabaseService);
           const polls = dbService.getPolls(1);
-
           if (polls.length > 0) {
-            const lastPoll = polls[0];
-            const lastPollDate = new Date(lastPoll.timestamp);
-            const uptime = Date.now() - lastPoll.timestamp;
-            const uptimeStr = formatDuration(uptime);
-
-            console.log(`\nLast Poll: ${lastPollDate.toLocaleString()}`);
-            console.log(
-              `Status: ${lastPoll.success ? '✅ Success' : '❌ Failed'}`,
-            );
-            console.log(`Products: ${lastPoll.product_count}`);
-            console.log(`New Products: ${lastPoll.new_products}`);
-            console.log(`Duration: ${lastPoll.duration_ms}ms`);
-            if (lastPoll.error) {
-              console.log(`Error: ${lastPoll.error}`);
-            }
+            lastPoll = polls[0];
           }
-
-          await app.close();
-        } catch (error) {
-          console.log('\n⚠️  Could not fetch poll information');
+          await nestApp.close();
+        } catch {
+          // Could not fetch poll info
         }
-      } else {
-        console.log('\nUse "lumentui start" to start the daemon');
+
+        // Re-render with data
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        rerender(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          React.createElement(StatusViewModule.StatusView, {
+            daemonStatus,
+            ipcReachable,
+            lastPoll,
+            loading: false,
+          }),
+        );
       }
 
-      console.log('');
       process.exit(0);
-    } catch (error) {
-      console.error('❌ Failed to get status:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to get status:', errorMessage);
       process.exit(1);
     }
   });
@@ -513,9 +557,9 @@ program
   .description('Display daemon logs')
   .option('--follow', 'Follow log output (stream)')
   .option('-n, --lines <number>', 'Number of lines to show', '50')
-  .action(async (options) => {
+  .action((options: { follow?: boolean; lines: string }) => {
     try {
-      const logDir = path.join(process.cwd(), 'data', 'logs');
+      const logDir = path.join(PathsUtil.getDataDir(), 'logs');
       const logFiles = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
 
       if (logFiles.length === 0) {
@@ -544,9 +588,13 @@ program
 
       displayLines.forEach((line) => {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           const logEntry = JSON.parse(line);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
           const timestamp = new Date(logEntry.timestamp).toLocaleTimeString();
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-member-access
           const level = logEntry.level.toUpperCase().padEnd(5);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           const message = logEntry.message;
           console.log(`[${timestamp}] ${level} ${message}`);
         } catch {
@@ -577,11 +625,15 @@ program
                   .filter((l) => l.trim());
                 newLines.forEach((line) => {
                   try {
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     const logEntry = JSON.parse(line);
                     const timestamp = new Date(
+                      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
                       logEntry.timestamp,
                     ).toLocaleTimeString();
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-member-access
                     const level = logEntry.level.toUpperCase().padEnd(5);
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
                     const message = logEntry.message;
                     console.log(`[${timestamp}] ${level} ${message}`);
                   } catch {
@@ -602,8 +654,10 @@ program
           process.exit(0);
         });
       }
-    } catch (error) {
-      console.error('❌ Failed to read logs:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to read logs:', errorMessage);
       process.exit(1);
     }
   });
@@ -620,7 +674,7 @@ const configCommand = program
  * Config utilities
  */
 class ConfigManager {
-  private static readonly ENV_FILE = path.join(process.cwd(), '.env');
+  private static readonly ENV_FILE = PathsUtil.getEnvFilePath();
 
   // Known configuration keys with validation rules
   private static readonly CONFIG_SCHEMA: Record<
@@ -631,11 +685,6 @@ class ConfigManager {
       sensitive?: boolean;
     }
   > = {
-    LUMENTUI_NOTIFICATION_PHONE: {
-      description: 'WhatsApp notification phone number (E.164 format)',
-      validator: (value) => CliValidator.validatePhoneNumber(value),
-      sensitive: true,
-    },
     LUMENTUI_POLL_INTERVAL: {
       description: 'Polling interval in seconds',
       validator: (value) =>
@@ -656,11 +705,6 @@ class ConfigManager {
     },
     LUMENTUI_SHOP_URL: {
       description: 'Shopify shop URL',
-    },
-    NOTIFICATION_PHONE: {
-      description: 'WhatsApp notification phone number (E.164 format)',
-      validator: (value) => CliValidator.validatePhoneNumber(value),
-      sensitive: true,
     },
     SHOPIFY_TIMEOUT_MS: {
       description: 'API timeout in milliseconds',
@@ -830,7 +874,7 @@ configCommand
   .command('get')
   .description('Display current configuration values')
   .option('-a, --all', 'Show all configuration values (including non-standard)')
-  .action((options) => {
+  .action((options: { all?: boolean }) => {
     try {
       const config = ConfigManager.readEnvFile();
 
@@ -867,8 +911,10 @@ configCommand
 
       console.log('\n' + ''.padEnd(80, '=') + '\n');
       process.exit(0);
-    } catch (error) {
-      console.error('Failed to read configuration:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('Failed to read configuration:', errorMessage);
       process.exit(1);
     }
   });
@@ -935,25 +981,230 @@ configCommand
       console.log('  lumentui stop && lumentui start');
 
       process.exit(0);
-    } catch (error) {
-      console.error('Failed to update configuration:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('Failed to update configuration:', errorMessage);
       process.exit(1);
     }
   });
 
 /**
- * Helper: Format duration in ms to human-readable string
+ * Utility class for formatting CLI output tables
  */
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
+class TableFormatter {
+  /**
+   * Truncate text to max length with ellipsis
+   */
+  static truncate(text: string, maxLength: number): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return text.substring(0, maxLength - 3) + '...';
+  }
 
-  if (days > 0) return `${days}d ${hours % 24}h`;
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
+  /**
+   * Format notification history for display
+   */
+  static formatHistoryTable(
+    history: import('./common/utils/ipc-client.util').FormattedNotification[],
+  ): Array<Record<string, string>> {
+    return history.map((n) => ({
+      Time: n.formattedTimestamp,
+      Product: this.truncate(n.productTitle || n.productId, 40),
+      Status: n.status === 'sent' ? '✓ sent' : '✗ failed',
+      Change: this.truncate(n.availabilityChange || '-', 25),
+    }));
+  }
+
+  /**
+   * Format notification statistics for display
+   */
+  static formatStatsTable(
+    stats: import('./common/utils/ipc-client.util').NotificationStats['countByProduct'],
+  ): Array<Record<string, string | number>> {
+    return stats.map((p) => ({
+      Product: this.truncate(p.productTitle || p.productId, 45),
+      Sent: p.sentCount,
+      Failed: p.failedCount,
+      Total: p.totalCount,
+      'Success %':
+        p.totalCount > 0
+          ? ((p.sentCount / p.totalCount) * 100).toFixed(1) + '%'
+          : '0%',
+    }));
+  }
 }
+
+/**
+ * Command: lumentui history
+ * View notification history with filtering options
+ */
+program
+  .command('history')
+  .description('View notification history')
+  .option('--product <id>', 'Filter by product ID')
+  .option('--status <status>', 'Filter by notification status (sent|failed)')
+  .option('--days <number>', 'Show history from last N days', '30')
+  .option('--limit <number>', 'Maximum records to show', '50')
+  .option('--stats', 'Show statistics instead of history list')
+  .action(
+    async (options: {
+      product?: string;
+      status?: string;
+      days: string;
+      limit: string;
+      stats?: boolean;
+    }) => {
+      try {
+        // Validate options
+        const daysValidation = CliValidator.validatePositiveInteger(
+          options.days,
+          '--days',
+        );
+        if (!daysValidation.valid) {
+          console.error(`❌ ${daysValidation.error}`);
+          process.exit(1);
+        }
+
+        const limitValidation = CliValidator.validateNumeric(
+          options.limit,
+          '--limit',
+          1,
+          1000,
+        );
+        if (!limitValidation.valid) {
+          console.error(`❌ ${limitValidation.error}`);
+          process.exit(1);
+        }
+
+        const statusValidation = CliValidator.validateEnum(
+          options.status,
+          '--status',
+          ['sent', 'failed'],
+          true,
+        );
+        if (!statusValidation.valid) {
+          console.error(`❌ ${statusValidation.error}`);
+          process.exit(1);
+        }
+
+        const status = PidManager.getDaemonStatus();
+
+        if (!status.isRunning) {
+          console.error('❌ Daemon is not running');
+          console.error('Start the daemon first: lumentui start');
+          process.exit(1);
+        }
+
+        const reachable = await IpcClient.isDaemonReachable();
+        if (!reachable) {
+          console.error('❌ Cannot connect to daemon');
+          console.error('The daemon is running but not responding via IPC.');
+          process.exit(1);
+        }
+
+        if (options.stats) {
+          const result = await IpcClient.getNotificationStats();
+
+          if (!result.success) {
+            console.error('❌ Failed to get notification statistics');
+            if (result.error) {
+              console.error(`Error: ${result.error}`);
+            }
+            process.exit(1);
+          }
+
+          const { stats } = result;
+
+          console.log('\n Notification Statistics\n');
+          console.log(''.padEnd(80, '='));
+          console.log(`\nTotal Sent:   ${stats.totalSent}`);
+          console.log(`Total Failed: ${stats.totalFailed}`);
+          console.log(
+            `Success Rate: ${stats.totalSent + stats.totalFailed > 0 ? ((stats.totalSent / (stats.totalFailed + stats.totalSent)) * 100).toFixed(1) : 0}%`,
+          );
+
+          if (stats.countByProduct.length > 0) {
+            console.log('\n By Product:\n');
+            console.table(
+              TableFormatter.formatStatsTable(stats.countByProduct),
+            );
+          } else {
+            console.log('\nNo notification history found.');
+          }
+
+          console.log(''.padEnd(80, '=') + '\n');
+        } else {
+          const filters: import('./common/utils/ipc-client.util').NotificationHistoryFilters =
+            {
+              limit: parseInt(options.limit, 10),
+            };
+
+          if (options.status) {
+            filters.status = options.status as 'sent' | 'failed';
+          }
+
+          if (options.product) {
+            filters.productId = options.product;
+          }
+
+          const days = parseInt(options.days, 10);
+          const dateFrom = new Date();
+          dateFrom.setDate(dateFrom.getDate() - days);
+          filters.dateFrom = dateFrom.toISOString();
+
+          const result = await IpcClient.getNotificationHistory(filters);
+
+          if (!result.success) {
+            console.error('❌ Failed to get notification history');
+            if (result.error) {
+              console.error(`Error: ${result.error}`);
+            }
+            process.exit(1);
+          }
+
+          const { history, count } = result;
+
+          if (history.length === 0) {
+            console.log('\nNo notification history found.');
+            console.log(`Filters: Last ${days} days`);
+            if (options.product) {
+              console.log(`  Product ID: ${options.product}`);
+            }
+            if (options.status) {
+              console.log(`  Status: ${options.status}`);
+            }
+            process.exit(0);
+          }
+
+          console.log(
+            `\n Notification History (${history.length} of ${count} total)\n`,
+          );
+          console.log(''.padEnd(80, '='));
+
+          console.table(TableFormatter.formatHistoryTable(history));
+
+          console.log(''.padEnd(80, '='));
+          console.log(`\nShowing ${history.length} of ${count} total records`);
+          console.log(`Filters: Last ${days} days`);
+          if (options.product) {
+            console.log(`  Product ID: ${options.product}`);
+          }
+          if (options.status) {
+            console.log(`  Status: ${options.status}`);
+          }
+          console.log('');
+        }
+
+        process.exit(0);
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        console.error('❌ Failed to get notification history:', errorMessage);
+        process.exit(1);
+      }
+    },
+  );
 
 program.parse();

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { theme } from '../theme';
-import { Product } from '../hooks/useDaemon';
+import Spinner from 'ink-spinner';
+import { theme } from '../theme.js';
+import { Product } from '../hooks/useDaemon.js';
 
 interface ProductListProps {
   products: Product[];
@@ -11,7 +12,7 @@ interface ProductListProps {
 }
 
 /**
- * Product list table component
+ * Product list component with styled rows
  */
 export const ProductList: React.FC<ProductListProps> = ({
   products,
@@ -23,21 +24,40 @@ export const ProductList: React.FC<ProductListProps> = ({
     return (
       <Box
         flexDirection="column"
-        borderStyle="single"
+        borderStyle="round"
         borderColor={theme.colors.border}
-        padding={1}
+        flexGrow={1}
+        alignItems="center"
+        justifyContent="center"
       >
-        <Text color={theme.colors.textMuted}>No products found.</Text>
-        <Text dimColor>The daemon might still be fetching products...</Text>
+        <Box>
+          <Text color={theme.colors.primary}>
+            <Spinner type="dots" />
+          </Text>
+          <Text color={theme.colors.primary}> Loading products…</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color={theme.colors.textMuted}>
+            Waiting for daemon to fetch product catalog
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Press{' '}
+            <Text color={theme.colors.accent} bold>
+              f
+            </Text>{' '}
+            to force a poll
+          </Text>
+        </Box>
       </Box>
     );
   }
 
-  // Format price
-  const formatPrice = (variants: Product['variants']) => {
-    if (variants.length === 0) return 'N/A';
+  const formatPrice = (product: Product) => {
+    if (product.variants.length === 0) return `$${product.price.toFixed(2)}`;
 
-    const prices = variants.map((v) => parseFloat(v.price));
+    const prices = product.variants.map((v) => v.price);
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
 
@@ -48,106 +68,103 @@ export const ProductList: React.FC<ProductListProps> = ({
     return `$${minPrice.toFixed(2)} - $${maxPrice.toFixed(2)}`;
   };
 
-  // Get availability status
-  const getAvailabilityIndicator = (product: Product) => {
-    if (product.available) {
-      return (
-        <Text color={theme.colors.available}>
-          {theme.symbols.check} Available
-        </Text>
-      );
-    } else {
-      return (
-        <Text color={theme.colors.unavailable}>
-          {theme.symbols.cross} Sold Out
-        </Text>
-      );
-    }
-  };
-
   return (
     <Box
       flexDirection="column"
-      borderStyle="single"
+      borderStyle="round"
       borderColor={theme.colors.border}
+      flexGrow={1}
     >
       {/* Header */}
-      <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1}>
-        <Box width="60%">
-          <Text bold color={theme.colors.primary}>
-            Product Name
+      <Box paddingX={1} paddingY={0}>
+        <Box width={3}>
+          <Text color={theme.colors.textMuted}> </Text>
+        </Box>
+        <Box width="55%">
+          <Text bold color={theme.colors.textDim}>
+            PRODUCT
           </Text>
         </Box>
         <Box width="20%">
-          <Text bold color={theme.colors.primary}>
-            Price
+          <Text bold color={theme.colors.textDim}>
+            PRICE
           </Text>
         </Box>
-        <Box width="20%">
-          <Text bold color={theme.colors.primary}>
-            Status
+        <Box width="25%">
+          <Text bold color={theme.colors.textDim}>
+            STATUS
           </Text>
         </Box>
       </Box>
+      <Box paddingX={1}>
+        <Text color={theme.colors.border}>{'─'.repeat(76)}</Text>
+      </Box>
 
       {/* Product rows */}
-      <Box flexDirection="column" paddingX={1} paddingY={1}>
+      <Box flexDirection="column" paddingX={1} flexGrow={1} overflow="hidden">
         {products.map((product, index) => {
           const isSelected = index === selectedIndex;
 
           return (
-            <Box
-              key={product.id}
-              marginBottom={index < products.length - 1 ? 1 : 0}
-            >
-              <Box width="100%" paddingX={1}>
-                {isSelected && (
+            <Box key={product.id} paddingY={0}>
+              <Box width={3}>
+                {isSelected ? (
                   <Text color={theme.colors.accent} bold>
                     {theme.symbols.arrow}{' '}
                   </Text>
+                ) : (
+                  <Text> </Text>
                 )}
+              </Box>
 
-                <Box width="60%">
-                  <Text
-                    color={
-                      isSelected ? theme.colors.text : theme.colors.textDim
-                    }
-                    bold={isSelected}
-                  >
-                    {product.title}
+              <Box width="55%">
+                <Text
+                  color={isSelected ? theme.colors.text : theme.colors.textDim}
+                  bold={isSelected}
+                  wrap="truncate"
+                  inverse={isSelected}
+                >
+                  {isSelected ? ` ${product.title} ` : product.title}
+                </Text>
+              </Box>
+
+              <Box width="20%">
+                <Text
+                  color={
+                    isSelected ? theme.colors.accent : theme.colors.textDim
+                  }
+                  bold={isSelected}
+                >
+                  {formatPrice(product)}
+                </Text>
+              </Box>
+
+              <Box width="25%">
+                {product.available ? (
+                  <Text color={theme.colors.available}>
+                    {theme.symbols.check} Available
                   </Text>
-                </Box>
-
-                <Box width="20%">
-                  <Text
-                    color={
-                      isSelected ? theme.colors.text : theme.colors.textDim
-                    }
-                    bold={isSelected}
-                  >
-                    {formatPrice(product.variants)}
+                ) : (
+                  <Text color={theme.colors.unavailable}>
+                    {theme.symbols.cross} Sold Out
                   </Text>
-                </Box>
-
-                <Box width="20%">{getAvailabilityIndicator(product)}</Box>
+                )}
               </Box>
             </Box>
           );
         })}
       </Box>
 
-      {/* Footer stats */}
-      <Box
-        borderStyle="single"
-        borderColor={theme.colors.border}
-        paddingX={1}
-        justifyContent="space-between"
-      >
+      {/* Footer */}
+      <Box paddingX={1}>
+        <Text color={theme.colors.border}>{'─'.repeat(76)}</Text>
+      </Box>
+      <Box paddingX={1} paddingBottom={0} justifyContent="space-between">
         <Text dimColor>
-          Showing {products.length} of {totalProducts} products
+          {products.length} of {totalProducts} products
         </Text>
         <Text color={theme.colors.available}>
-          {availableProducts} available
+          {theme.symbols.bullet} {availableProducts} available
         </Text>
       </Box>
     </Box>

@@ -25,10 +25,10 @@ Complete guide for deploying LumentuiAPI to production environment.
 
 - **Operating System:** macOS 10.15+ or Linux (Ubuntu 20.04+)
 - **Node.js:** 18.x or higher (LTS recommended)
-- **npm:** 9.x or higher
+- **pnpm:** 8.x or higher
 - **PM2:** 5.x or higher (process manager)
 - **Chrome Browser:** Latest stable version
-- **Clawdbot:** Installed and configured
+- **node-notifier:** For macOS native notifications
 - **Disk Space:** Minimum 500MB free
 - **Memory:** Minimum 512MB RAM available
 
@@ -44,25 +44,25 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Install PM2 globally
-npm install -g pm2
+ppnpm install -g pm2
 
 # Verify installations
 node --version   # Should be >= v18.0.0
-npm --version    # Should be >= 9.0.0
+pnpm --version   # Should be >= 8.0.0
 pm2 --version    # Should be >= 5.0.0
 ```
 
-### Clawdbot Setup
+### node-notifier Setup
 
 ```bash
-# Verify Clawdbot is running
-clawdbot gateway status
+# Verify node-notifier is available
+pnpm list node-notifier
 
-# If not running, start it
-clawdbot gateway start
+# If not installed, it will be installed with dependencies
+pnpm install
 
-# Test WhatsApp integration
-message --action=send --channel=whatsapp --target=+50586826131 --message="LumentuiAPI deployment test"
+# Test macOS notifications
+node -e "const notifier = require('node-notifier'); notifier.notify('LumentuiAPI deployment test');"
 ```
 
 ---
@@ -77,7 +77,7 @@ mkdir -p ~/production
 cd ~/production
 
 # Clone repository (or copy from development)
-cp -r ~/clawd/development/lumentui/lumentui ./lumentui-prod
+cp -r $HOME/development/lumentui ./lumentui-prod
 cd lumentui-prod
 ```
 
@@ -85,17 +85,17 @@ cd lumentui-prod
 
 ```bash
 # Install production dependencies only
-npm ci --production
+pnpm install --frozen-lockfile --production
 
 # Or install all dependencies (includes devDependencies for building)
-npm ci
+pnpm install --frozen-lockfile
 ```
 
 ### 3. Build Application
 
 ```bash
 # Build TypeScript to JavaScript
-npm run build
+pnpm runbuild
 
 # Verify build output
 ls -la dist/
@@ -138,7 +138,7 @@ NODE_ENV=production
 LOG_LEVEL=info
 
 # === Database Configuration ===
-DB_PATH=/home/clawdbot/production/lumentui-prod/data/lumentui.db
+DB_PATH=$HOME/production/lumentui-prod/data/lumentui.db
 
 # === Shopify API Configuration ===
 LUMENTUI_SHOP_URL=https://shop.lumenalta.com
@@ -151,17 +151,16 @@ LUMENTUI_POLL_INTERVAL=1800
 SCHEDULER_ENABLED=true
 
 # === Notification Configuration ===
-NOTIFICATION_PHONE=+50586826131
 NOTIFICATION_ENABLED=true
 # Throttle: 1 notification per hour per product
 NOTIFICATION_THROTTLE_MINUTES=60
 
 # === Authentication ===
-LUMENTUI_COOKIES_PATH=/home/clawdbot/production/lumentui-prod/data/cookies.json
+LUMENTUI_COOKIES_PATH=$HOME/production/lumentui-prod/data/cookies.json
 LUMENTUI_USER_AGENT=LumenTUI/1.0
 
 # === Logging Configuration ===
-LOG_FILE=/home/clawdbot/production/lumentui-prod/data/logs/app.log
+LOG_FILE=$HOME/production/lumentui-prod/data/logs/app.log
 LOG_MAX_SIZE=10m
 LOG_MAX_FILES=14d
 
@@ -186,8 +185,8 @@ ls -la .env.production
 | Variable                 | Description                | Example                      | Required |
 | ------------------------ | -------------------------- | ---------------------------- | -------- |
 | `NODE_ENV`               | Environment name           | `production`                 | ✅       |
-| `DB_PATH`                | SQLite database path       | `/full/path/to/db`           | ✅       |
-| `NOTIFICATION_PHONE`     | WhatsApp target (E.164)    | `+50586826131`               | ✅       |
+| `DB_PATH`                | SQLite database path       | `$HOME/prod/data/db`         | ✅       |
+| `NOTIFICATION_ENABLED`   | Enable notifications       | `true`                       | ✅       |
 | `LUMENTUI_SHOP_URL`      | Shopify store URL          | `https://shop.lumenalta.com` | ✅       |
 | `LOG_LEVEL`              | Logging level              | `info` or `warn`             | ✅       |
 | `LUMENTUI_POLL_INTERVAL` | Polling interval (seconds) | `1800` (30 min)              | ✅       |
@@ -207,7 +206,7 @@ module.exports = {
     {
       name: 'lumentui-api',
       script: './dist/main.js',
-      cwd: '/home/clawdbot/production/lumentui-prod',
+      cwd: process.env.HOME + '/production/lumentui-prod',
       instances: 1,
       exec_mode: 'fork',
 
@@ -313,7 +312,7 @@ pm2 info lumentui-api
 
 ### Database Location
 
-Production database: `/home/clawdbot/production/lumentui-prod/data/lumentui.db`
+Production database: `$HOME/production/lumentui-prod/data/lumentui.db`
 
 ### Database Schema
 
@@ -462,8 +461,8 @@ Create backup script: `scripts/backup.sh`
 #!/bin/bash
 # scripts/backup.sh - Daily database backup
 
-BACKUP_DIR="/home/clawdbot/production/lumentui-prod/backups"
-DB_PATH="/home/clawdbot/production/lumentui-prod/data/lumentui.db"
+BACKUP_DIR="$HOME/production/lumentui-prod/backups"
+DB_PATH="$HOME/production/lumentui-prod/data/lumentui.db"
 DATE=$(date +%Y-%m-%d)
 BACKUP_FILE="$BACKUP_DIR/lumentui-$DATE.db"
 
@@ -495,7 +494,7 @@ chmod +x scripts/backup.sh
 crontab -e
 
 # Add daily backup at 3 AM
-0 3 * * * /home/clawdbot/production/lumentui-prod/scripts/backup.sh >> /home/clawdbot/production/lumentui-prod/data/logs/backup.log 2>&1
+0 3 * * * $HOME/production/lumentui-prod/scripts/backup.sh >> $HOME/production/lumentui-prod/data/logs/backup.log 2>&1
 ```
 
 #### Manual Backup
@@ -570,21 +569,21 @@ git fetch origin
 git pull origin main
 
 # Or copy from development
-# cp -r ~/clawd/development/lumentui/lumentui/* .
+# cp -r $HOME/development/lumentui/* .
 ```
 
 #### 3. Update Dependencies
 
 ```bash
 # Install new dependencies
-npm ci --production
+pnpm install --frozen-lockfile --production
 ```
 
 #### 4. Rebuild Application
 
 ```bash
 # Build TypeScript
-npm run build
+pnpm runbuild
 
 # Verify build
 ls -la dist/main.js
@@ -594,13 +593,13 @@ ls -la dist/main.js
 
 ```bash
 # Install dev dependencies if needed
-npm ci
+pnpm install --frozen-lockfile
 
 # Run tests
-npm test
+pnpm test
 
 # Check coverage
-npm run test:cov
+pnpm runtest:cov
 ```
 
 #### 6. Restart Application
@@ -647,8 +646,8 @@ cp .env.production.bak .env.production
 git reset --hard HEAD~1
 
 # Rebuild
-npm ci --production
-npm run build
+pnpm install --frozen-lockfile --production
+pnpm runbuild
 
 # Restart
 pm2 start lumentui-api
@@ -753,35 +752,39 @@ pm2 logs lumentui-api
    pm2 start ecosystem.config.js --env production
    ```
 
-### Notifications Not Sending
+### Notifications Not Showing
 
-**Symptom:** No WhatsApp messages received
+**Symptom:** No macOS notifications appearing
 
 **Solutions:**
 
-1. Verify Clawdbot is running:
+1. Verify node-notifier is installed:
 
    ```bash
-   clawdbot gateway status
+   pnpm list node-notifier
    ```
 
-2. Check phone number format (must be E.164):
+2. Check notification settings are enabled:
 
    ```bash
-   grep NOTIFICATION_PHONE .env.production
-   # Should be: +50586826131 (with country code)
+   grep NOTIFICATION_ENABLED .env.production
+   # Should be: true
    ```
 
 3. Test notification manually:
 
    ```bash
-   message --action=send --channel=whatsapp --target=+50586826131 --message="Test"
+   node -e "const notifier = require('node-notifier'); notifier.notify('Test');"
    ```
 
 4. Check application logs:
+
    ```bash
    grep "notification" data/logs/app.log
    ```
+
+5. Verify macOS notification permissions:
+   - System Preferences → Notifications → ensure Node.js has permission
 
 ### Cookie Authentication Failed
 
@@ -836,7 +839,7 @@ chmod 700 scripts/*.sh
 ### Network Security
 
 - [ ] Application runs on localhost only (no external ports)
-- [ ] Clawdbot gateway is secured
+- [ ] Notifications are properly configured
 - [ ] SSH access is key-based (no password auth)
 - [ ] Firewall is enabled and configured
 
@@ -876,7 +879,7 @@ Before going live:
 - [ ] Backup cron job scheduled
 - [ ] Log rotation configured
 - [ ] File permissions secured
-- [ ] Clawdbot integration tested
+- [ ] macOS notifications tested
 - [ ] Health checks verified
 - [ ] Monitoring dashboard setup
 - [ ] Documentation reviewed

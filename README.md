@@ -1,9 +1,10 @@
 # 🌟 LumenTUI - Product Monitoring Service
 
-> Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time WhatsApp notifications
+> Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time macOS notifications
 
-[![Tests](https://img.shields.io/badge/tests-76%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-179%20passing-brightgreen)]()
 [![Coverage](<https://img.shields.io/badge/coverage-93%25%20(core)-green>)]()
+[![Version](https://img.shields.io/badge/version-1.2.3-blue)]()
 [![NestJS](https://img.shields.io/badge/NestJS-11.x-red)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)]()
 
@@ -11,18 +12,20 @@
 
 ## 📖 Description
 
-LumenTUI is a production-ready NestJS application that monitors product availability on shop.lumenalta.com and sends instant WhatsApp notifications when products become available. Built with enterprise-grade architecture, dependency injection, and comprehensive test coverage.
+LumenTUI is a production-ready NestJS application that monitors product availability on shop.lumenalta.com and sends instant macOS notifications when products become available. Built with enterprise-grade architecture, dependency injection, and comprehensive test coverage.
 
 ### ✨ Key Features
 
-- 🔄 **Real-time Monitoring** - Polls Shopify storefront API for product updates
-- 📱 **WhatsApp Notifications** - Instant alerts via Clawdbot integration
+- 🔄 **Real-time Monitoring** - Configurable polling of Shopify storefront API
+- 📱 **macOS Notifications** - Instant native notification center alerts
 - 🍪 **Cookie-based Auth** - Secure authentication using macOS Chrome Keychain
 - 💾 **SQLite Storage** - Lightweight, reliable product tracking
 - 🏗️ **NestJS Architecture** - Modular, scalable, testable design
-- 🧪 **High Test Coverage** - 76 unit tests with 93%+ coverage on core services
-- 🔐 **Production Ready** - Environment-based config, proper logging
-- 📊 **CLI Interface** - Commander.js-based command interface
+- 🧪 **High Test Coverage** - 179 unit tests with 93%+ coverage on core services
+- 🔐 **Production Ready** - Daemon mode, IPC layer, proper logging
+- 📊 **Full CLI** - Complete command interface (login, start, stop, status, logs)
+- 🌍 **Cross-platform** - Works on macOS, Linux, and Windows
+- 📦 **Easy Distribution** - npm package and Homebrew tap
 
 ---
 
@@ -32,16 +35,22 @@ LumenTUI is a production-ready NestJS application that monitors product availabi
 
 ```
 AppModule
-├── ConfigModule         # Environment configuration (global)
-├── LoggerModule         # Winston-based structured logging
-├── AuthModule           # Cookie extraction & storage
-│   └── AuthService      # chrome-cookies-secure integration
-├── ApiModule            # Shopify API integration
-│   └── ShopifyService   # HTTP client with retry logic
-├── StorageModule        # SQLite database layer
-│   └── DatabaseService  # Product CRUD operations
-└── NotificationModule   # WhatsApp notifications
-    └── NotificationService  # Clawdbot CLI integration
+├── ConfigModule            # Environment configuration (global)
+├── LoggerModule            # Winston-based structured logging
+├── AuthModule              # Cookie extraction & storage
+│   └── AuthService         # chrome-cookies-secure integration
+├── ApiModule               # Shopify API integration
+│   └── ShopifyService      # HTTP client with retry logic
+├── StorageModule           # SQLite database layer
+│   └── DatabaseService     # Product CRUD operations
+├── SchedulerModule         # Polling scheduler
+│   └── SchedulerService    # Configurable interval polling
+├── IpcModule               # Inter-process communication
+│   └── IpcGateway          # Unix socket/Named pipe server
+├── DifferModule            # Change detection
+│   └── DifferService       # Product comparison logic
+└── NotificationModule      # macOS notifications
+    └── NotificationService # Native notification center integration
 ```
 
 ### Data Flow
@@ -60,8 +69,8 @@ AppModule
                             │
                             ▼
                      ┌──────────────┐
-                     │  WhatsApp    │
-                     │  (Clawdbot)  │
+                     │    macOS     │
+                     │Notifications │
                      └──────────────┘
 ```
 
@@ -70,20 +79,38 @@ AppModule
 ## 📋 Requirements
 
 - **Node.js** >= 18.x
-- **npm** >= 9.x
-- **macOS** (for Chrome Keychain integration)
+- **pnpm** >= 10.x (for development)
+- **macOS** (for Chrome Keychain integration and native notifications)
 - **Chrome Browser** (with valid shop.lumenalta.com session)
-- **Clawdbot** (for WhatsApp notifications)
 
 ---
 
 ## 🚀 Installation
 
-### 1. Clone & Install Dependencies
+### Homebrew (Recommended)
 
 ```bash
-cd ~/clawd/development/lumentui/lumentui
-npm install
+brew tap victorstein/lumentui
+brew install lumentui
+```
+
+### Package Manager
+
+```bash
+# Using pnpm (recommended)
+pnpm install -g lumentui
+
+# Or using npm
+npm install -g lumentui
+```
+
+### From Source
+
+```bash
+git clone https://github.com/victorstein/lumentui.git
+cd lumentui
+pnpm install
+pnpm run build
 ```
 
 ### 2. Configure Environment
@@ -96,7 +123,6 @@ Edit `.env` and configure:
 
 ```bash
 # Required
-NOTIFICATION_PHONE=+50586826131           # Your WhatsApp number (E.164 format)
 LUMENTUI_SHOP_URL=https://shop.lumenalta.com
 
 # Optional (defaults provided)
@@ -110,8 +136,7 @@ LOG_LEVEL=info                            # Logging level
 Extract cookies from Chrome (requires Keychain access):
 
 ```bash
-npm run build
-node dist/cli.js auth
+lumentui login
 ```
 
 Expected output:
@@ -125,7 +150,7 @@ Expected output:
 Verify session:
 
 ```bash
-node dist/cli.js auth --check
+lumentui login --check
 ```
 
 ---
@@ -135,40 +160,49 @@ node dist/cli.js auth --check
 ### Development Mode
 
 ```bash
-# Start with hot-reload
-npm run start:dev
+# Start daemon with hot-reload
+pnpm run dev
 
 # Run with debug logging
-LOG_LEVEL=debug npm run start:dev
+LOG_LEVEL=debug pnpm run dev
 ```
 
 ### Production Mode
 
 ```bash
 # Build for production
-npm run build
+pnpm run build
 
-# Start production server
-npm run start:prod
+# Start CLI
+lumentui start
 ```
 
 ### CLI Commands
 
 ```bash
 # Authenticate with shop.lumenalta.com
-lumentui auth
+lumentui login
 
 # Verify current session
-lumentui auth --check
+lumentui login --check
 
-# Start daemon + TUI (planned)
+# Start daemon + TUI
 lumentui start
 
-# Stop daemon (planned)
+# Stop daemon
 lumentui stop
 
-# Check daemon status (planned)
+# Check daemon status
 lumentui status
+
+# View daemon logs
+lumentui logs
+
+# Manage configuration
+lumentui config
+
+# Trigger manual poll
+lumentui poll
 ```
 
 ---
@@ -178,53 +212,123 @@ lumentui status
 ### Run All Tests
 
 ```bash
-npm test
+pnpm test
 ```
 
 ### Watch Mode
 
 ```bash
-npm run test:watch
+pnpm run test:watch
 ```
 
 ### Coverage Report
 
 ```bash
-npm run test:cov
+pnpm run test:cov
 ```
 
 Expected output:
 
 ```
-Test Suites: 6 passed, 6 total
-Tests:       76 passed, 76 total
+Test Suites: 11 passed, 11 total
+Tests:       179 passed, 179 total
 Coverage:    93%+ (core services average)
 ```
 
-### Test Files
+### Test Coverage
 
-| Module                  | Tests      | Coverage |
-| ----------------------- | ---------- | -------- |
-| **AuthService**         | Unit tests | 91.04%   |
-| **ShopifyService**      | Unit tests | 85.71%   |
-| **DatabaseService**     | Unit tests | 98.24%   |
-| **NotificationService** | Unit tests | 100%     |
-| **SchedulerService**    | Unit tests | 93.54%   |
-| **AppController**       | Unit tests | 100%     |
+All core services have comprehensive unit tests with 90%+ coverage:
+
+- **AuthService** - Cookie extraction and storage
+- **ShopifyService** - API integration with retry logic
+- **DatabaseService** - SQLite operations and migrations
+- **NotificationService** - macOS notification delivery
+- **SchedulerService** - Polling and cron jobs
+- **IpcGateway** - Unix socket communication
+- **DifferService** - Product change detection
+- **PathsUtil** - Cross-platform path resolution
 
 ---
 
-## 📡 API Endpoints
+## 🔔 Notification Types
 
-Currently CLI-only, but the NestJS foundation supports REST endpoints:
+LumenTUI notifies you about three types of product changes (all types are always enabled):
 
-```typescript
-// Example endpoints (planned)
-GET  /api/products         // List all tracked products
-GET  /api/products/:id     // Get product details
-POST /api/auth/validate    // Validate cookies
-GET  /api/health           // Health check
+### 1. New Products
+
+When a product appears in the store for the first time.
+
 ```
+🔔 New Product Available
+Gaming Mouse - $59.99
+2 variants available
+```
+
+### 2. Price Changes
+
+When a product's price increases or decreases.
+
+```
+🔔 Price Change
+Premium Headphones
+Price dropped from $199.99 to $149.99
+```
+
+**Configuration:**
+
+- `LUMENTUI_NOTIFY_PRICE_THRESHOLD` - Minimum % change to trigger notification (default: `0`)
+  - `0` = Any price change triggers notification
+  - `10` = Only ≥10% changes trigger notification
+  - Applies to both increases and decreases
+
+**Example:** Set threshold to 10% to ignore minor price fluctuations:
+
+```bash
+LUMENTUI_NOTIFY_PRICE_THRESHOLD=10  # Only notify if price changes by 10% or more
+```
+
+### 3. Availability Changes
+
+When a product goes out of stock or comes back in stock.
+
+```
+🔔 Availability Update
+Gaming Keyboard is back in stock!
+Price: $89.99
+```
+
+### Notification Filters
+
+All notification types respect these filters:
+
+| Filter                          | Description                                | Example                    |
+| ------------------------------- | ------------------------------------------ | -------------------------- |
+| `LUMENTUI_NOTIFY_MIN_PRICE`     | Minimum product price to trigger notify    | `50` (ignore items <$50)   |
+| `LUMENTUI_NOTIFY_KEYWORDS`      | Product title must contain one of keywords | `gaming,mouse,keyboard`    |
+| `NOTIFICATION_THROTTLE_MINUTES` | Rate limit per product (cooldown period)   | `60` (1 hour, recommended) |
+
+**Example:** Only notify about gaming products over $100:
+
+```bash
+LUMENTUI_NOTIFY_MIN_PRICE=100
+LUMENTUI_NOTIFY_KEYWORDS=gaming,esports
+```
+
+### Rate Limiting
+
+To prevent notification spam, LumenTUI enforces a **60-minute cooldown** per product:
+
+- After sending any notification for a product, no further notifications for that product will be sent for 60 minutes
+- Rate limit applies across all notification types (new product, price change, availability change)
+- Different products have independent rate limits
+- Rate limit persists across daemon restarts (stored in database)
+
+**Example:** Product A's price drops at 2:00 PM:
+
+- ✅ 2:00 PM - Price drop notification sent
+- ❌ 2:15 PM - Product goes out of stock (notification blocked, within 60-min window)
+- ❌ 2:45 PM - Product back in stock (notification blocked, within 60-min window)
+- ✅ 3:01 PM - Price increases (notification sent, cooldown expired)
 
 ---
 
@@ -232,16 +336,19 @@ GET  /api/health           // Health check
 
 ### Environment Variables
 
-| Variable                 | Description             | Default                    | Required |
-| ------------------------ | ----------------------- | -------------------------- | -------- |
-| `NOTIFICATION_PHONE`     | WhatsApp target (E.164) | -                          | ✅       |
-| `LUMENTUI_SHOP_URL`      | Shopify store URL       | https://shop.lumenalta.com | ✅       |
-| `DB_PATH`                | SQLite database path    | data/lumentui.db           | ❌       |
-| `LOG_LEVEL`              | Logging level           | info                       | ❌       |
-| `LOG_FILE`               | Log file path           | data/logs/app.log          | ❌       |
-| `SHOPIFY_TIMEOUT_MS`     | API timeout             | 10000                      | ❌       |
-| `SHOPIFY_RETRY_ATTEMPTS` | Retry attempts          | 3                          | ❌       |
-| `LUMENTUI_COOKIES`       | Manual cookie override  | -                          | ❌       |
+| Variable                          | Description                                   | Default                    | Required |
+| --------------------------------- | --------------------------------------------- | -------------------------- | -------- |
+| `LUMENTUI_SHOP_URL`               | Shopify store URL                             | https://shop.lumenalta.com | ✅       |
+| `DB_PATH`                         | SQLite database path                          | data/lumentui.db           | ❌       |
+| `LOG_LEVEL`                       | Logging level                                 | info                       | ❌       |
+| `LOG_FILE`                        | Log file path                                 | data/logs/app.log          | ❌       |
+| `SHOPIFY_TIMEOUT_MS`              | API timeout                                   | 10000                      | ❌       |
+| `SHOPIFY_RETRY_ATTEMPTS`          | Retry attempts                                | 3                          | ❌       |
+| `LUMENTUI_COOKIES`                | Manual cookie override                        | -                          | ❌       |
+| `LUMENTUI_NOTIFY_PRICE_THRESHOLD` | Min % price change to notify (0 = any change) | 0                          | ❌       |
+| `LUMENTUI_NOTIFY_MIN_PRICE`       | Minimum product price to notify               | 0                          | ❌       |
+| `LUMENTUI_NOTIFY_KEYWORDS`        | Comma-separated keywords filter               | -                          | ❌       |
+| `NOTIFICATION_THROTTLE_MINUTES`   | Rate limit cooldown per product (minutes)     | 60                         | ❌       |
 
 ### Database Schema
 
@@ -300,11 +407,14 @@ lumentui/
 │       │   ├── entities/          # Product entity
 │       │   └── utils/             # Normalizers
 │       │
-│       ├── notification/          # WhatsApp notifications
+│       ├── notification/          # macOS notifications
 │       │   └── notification.service.ts
 │       │
-│       ├── poller/                # Polling scheduler (WIP)
-│       └── ipc/                   # Unix socket IPC (WIP)
+│       ├── scheduler/             # Polling scheduler
+│       │   └── scheduler.service.ts
+│       │
+│       └── ipc/                   # Unix socket IPC
+│           └── ipc.gateway.ts
 │
 ├── data/                          # Runtime data
 │   ├── lumentui.db                # SQLite database
@@ -317,8 +427,6 @@ lumentui/
 │
 ├── .env                           # Environment config (gitignored)
 ├── .env.example                   # Environment template
-├── .env.production                # Production config template
-├── ecosystem.config.js            # PM2 configuration
 ├── package.json                   # Dependencies & scripts
 ├── tsconfig.json                  # TypeScript config
 ├── nest-cli.json                  # NestJS CLI config
@@ -337,18 +445,16 @@ lumentui/
 
 1. Open Chrome and log into shop.lumenalta.com
 2. Grant Keychain access when prompted
-3. Run `node dist/cli.js auth` again
+3. Run `lumentui login` again
 
 **Problem:** `❌ No valid session`
 
 **Solution:**
 
 ```bash
-# Clear old cookies
-rm data/cookies.json
-
-# Re-authenticate
-node dist/cli.js auth
+# Clear old cookies and re-authenticate
+lumentui logout
+lumentui login
 ```
 
 ---
@@ -372,29 +478,28 @@ rm data/lumentui.db-wal data/lumentui.db-shm
 **Solution:**
 
 ```bash
-# Backup old database
-cp data/lumentui.db data/lumentui.db.backup
+# Stop daemon
+lumentui stop
 
-# Start fresh
-rm data/lumentui.db
-npm run start:dev  # Database will be recreated
+# Backup old database (macOS/Linux)
+cp ~/.local/share/lumentui/lumentui.db ~/.local/share/lumentui/lumentui.db.backup
+
+# Start fresh (database will be recreated)
+rm ~/.local/share/lumentui/lumentui.db
+lumentui start
 ```
 
 ---
 
 ### Notification Issues
 
-**Problem:** WhatsApp notifications not sending
+**Problem:** macOS notifications not appearing
 
 **Solution:**
 
-1. Verify Clawdbot is running: `clawdbot gateway status`
-2. Check phone number format: Must be E.164 (e.g., `+50586826131`)
-3. Test notification manually:
-
-```bash
-message --action=send --channel=whatsapp --target=+50586826131 --message="Test"
-```
+1. Check notification permissions: System Settings > Notifications > Terminal (or your app)
+2. Verify notifications are enabled in your environment
+3. Check logs for notification errors: `lumentui logs`
 
 ---
 
@@ -427,12 +532,12 @@ SHOPIFY_RETRY_ATTEMPTS=5
 
 ```bash
 # Clean install
-rm -rf node_modules package-lock.json
-npm install
+rm -rf node_modules pnpm-lock.yaml
+pnpm install
 
 # Rebuild
-npm run build
-npm test
+pnpm run build
+pnpm test
 ```
 
 **Problem:** Test database conflicts
@@ -442,7 +547,7 @@ Tests use in-memory SQLite by default. If issues persist:
 
 ```bash
 # Use separate test database
-DB_PATH=:memory: npm test
+DB_PATH=:memory: pnpm test
 ```
 
 ---
@@ -482,28 +587,28 @@ DB_PATH=:memory: npm test
 ### Adding a New Module
 
 ```bash
-nest g module modules/mymodule
-nest g service modules/mymodule
-nest g controller modules/mymodule
+pnpm exec nest g module modules/mymodule
+pnpm exec nest g service modules/mymodule
+pnpm exec nest g controller modules/mymodule
 ```
 
 ### Running Linter
 
 ```bash
-npm run lint
+pnpm run lint
 ```
 
 ### Formatting Code
 
 ```bash
-npm run format
+pnpm run format
 ```
 
 ### Debugging
 
 ```bash
 # Start with Node inspector
-npm run start:debug
+pnpm run dev:debug
 
 # Connect with Chrome DevTools:
 # chrome://inspect
@@ -543,58 +648,72 @@ Never share this file or commit it to version control.
 
 **Stein Hakase**  
 Email: stein.hakase.vs@gmail.com  
-GitHub: [@steinhakase](https://github.com/steinhakase)
+GitHub: [@victorstein](https://github.com/victorstein)
 
 ---
 
 ## 🙏 Acknowledgments
 
 - **NestJS** - Framework foundation
-- **Clawdbot** - WhatsApp integration
+- **node-notifier** - macOS notification integration
 - **Shopify** - Storefront API
 - **chrome-cookies-secure** - Cookie extraction
-- **better-sqlite3** - Database layer
+- **sql.js** - WASM-based SQLite database layer
 
 ---
 
 ## 📅 Changelog
 
+### v1.2.3 (2026-02-03)
+
+✅ Latest release:
+
+- Daemon mode with background process management
+- Full CLI with login, start, stop, status, logs, config, poll commands
+- IPC layer (Unix sockets/Named pipes)
+- Cross-platform path support (macOS, Linux, Windows)
+- PID file management
+- Configurable poll interval
+- Automated releases via GitHub Actions
+- npm and Homebrew distribution
+
 ### v1.0.0 (2025-01-21)
 
-✅ Initial release with complete implementation:
+✅ Initial release:
 
 - Auth module with Chrome cookie extraction
 - API module with Shopify integration + retry logic
 - Storage module with SQLite persistence
-- Scheduler module with cron jobs (30min polls)
-- Notification module with WhatsApp integration
-- Full test coverage (76 tests, 93%+ coverage on core services)
-- Integration tests for end-to-end flow
+- Scheduler module with configurable polling
+- Notification module with native macOS notifications
+- Full test coverage (179 tests, 93%+ coverage on core services)
 - CLI interface with Commander.js
-- Complete documentation (README, DEPLOYMENT, TESTING)
-- Production-ready with PM2 support
 
 ---
 
 ## 🚀 Roadmap
 
-### Phase 2 (Planned)
+### Phase 2 (Completed ✅)
 
-- [ ] Daemon mode with PM2
-- [ ] Ink-based TUI (React)
-- [ ] IPC communication (Unix sockets)
-- [ ] Real-time product list view
-- [ ] Product detail modal
-- [ ] Log streaming panel
+- [x] Daemon mode with background process management
+- [x] Ink-based TUI (React terminal interface)
+- [x] IPC communication (Unix sockets/Named pipes)
+- [x] Real-time product list view
+- [x] CLI commands (login, start, stop, status, logs, config, poll)
+- [x] Configurable poll interval
+- [x] Cross-platform path support (macOS, Linux, Windows)
+- [x] PID file management
+- [x] GitHub Actions CI/CD pipeline
+- [x] Homebrew tap distribution
+- [x] npm package distribution
 
-### Phase 3 (Future)
+### Phase 3 (Current)
 
-- [ ] REST API endpoints
-- [ ] Swagger documentation
-- [ ] Docker support
-- [ ] Multi-store support
-- [ ] Email notifications
-- [ ] Webhook support
+- [ ] Notification history view
+- [ ] Product detail modal in TUI
+- [ ] Interactive product filtering/search
+- [ ] TUI settings panel
+- [ ] Export product data (JSON/CSV)
 
 ---
 

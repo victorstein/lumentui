@@ -29,10 +29,10 @@ src/
 ├── modules/
 │   ├── auth/               # Chrome cookie extraction
 │   ├── api/                # Shopify HTTP client + normalizer
-│   ├── storage/            # SQLite via better-sqlite3
+│   ├── storage/            # SQLite via sql.js (WASM)
 │   ├── scheduler/          # @Cron polling + orchestration
 │   ├── differ/             # Product diff comparison
-│   ├── notification/       # WhatsApp notifications via Clawdbot
+│   ├── notification/       # macOS notifications via node-notifier
 │   └── ipc/                # Unix socket server (node-ipc)
 └── ui/                     # Ink TUI (React 18)
     ├── App.tsx             # Root component

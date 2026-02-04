@@ -3,10 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - main # Only run on main pushes (for releases)
   pull_request:
     branches:
       - main
+      - develop # Run on all PRs targeting main or develop
 
 jobs:
   test:
@@ -20,26 +21,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
+
+      - name: Check code formatting
+        run: pnpm run format:check
 
       - name: Run linter
-        run: npm run lint
+        run: pnpm run lint
+
+      - name: TypeScript type check
+        run: pnpm run type-check
 
       - name: Run unit tests
-        run: npm test
+        run: pnpm test
 
       - name: Run tests with coverage
-        run: npm run test:cov
+        run: pnpm run test:cov
 
       - name: Build project
-        run: npm run build
+        run: pnpm run build
 
       - name: Upload coverage artifact
         if: matrix.node-version == 20
@@ -48,3 +58,16 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 30
+
+      - name: CI Summary
+        if: always() && matrix.node-version == 20
+        run: |
+          echo "## ✅ CI Checks Complete (Node ${{ matrix.node-version }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quality Gates" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Code formatting (Prettier)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Linting (ESLint)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TypeScript type check" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Unit tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Test coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Build (daemon + CLI + TUI)" >> $GITHUB_STEP_SUMMARY

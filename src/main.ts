@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { LoggerService } from './common/logger/logger.service';
 import { IpcGateway } from './modules/ipc/ipc.gateway';
+import { PidManager } from './common/utils/pid.util';
 
 async function bootstrap() {
   // Create application context (no HTTP server)
@@ -24,15 +25,38 @@ async function bootstrap() {
   const ipcStatus = ipcGateway.getStatus();
   logger.log(`IPC server listening at ${ipcStatus.socketPath}`, 'Bootstrap');
 
+  // Create PID file
+  PidManager.ensureDataDir();
+  PidManager.savePid(process.pid);
+  logger.log(`PID file created: ${process.pid}`, 'Bootstrap');
+
   // Handle graceful shutdown
   const shutdown = async (signal: string) => {
     logger.log(`Received ${signal}, shutting down gracefully...`, 'Bootstrap');
+
+    // Force exit if graceful shutdown takes too long
+    const forceExitTimeout = setTimeout(() => {
+      logger.warn('Graceful shutdown timed out, forcing exit', 'Bootstrap');
+      process.exit(1);
+    }, 10_000);
+    forceExitTimeout.unref();
+
     await app.close();
+
+    // Remove PID file
+    PidManager.removePidFile();
+
+    // Clean up socket file after all modules have finished destroying
+    ipcGateway.cleanupSocket();
+
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGHUP', () => {
+    logger.log('Received SIGHUP (terminal closed), ignoring...', 'Bootstrap');
+  });
 
   // Keep process alive
   logger.log('Daemon is running. Press Ctrl+C to stop.', 'Bootstrap');

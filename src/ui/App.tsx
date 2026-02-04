@@ -1,32 +1,37 @@
-import React from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
-import { useDaemon } from './hooks/useDaemon';
-import { useProducts } from './hooks/useProducts';
-import { Header } from './components/Header';
-import { ProductList } from './components/ProductList';
-import { ProductDetail } from './components/ProductDetail';
-import { LogPanel } from './components/LogPanel';
-import { StatusBar } from './components/StatusBar';
-import { NotificationBanner } from './components/NotificationBanner';
-import { theme } from './theme';
+import React, { useState } from 'react';
+import { Box, Text, useInput, useApp, useStdout } from 'ink';
+import { DaemonProvider, useDaemonContext } from './context/DaemonContext.js';
+import { useProducts } from './hooks/useProducts.js';
+import { Header } from './components/Header.js';
+import { ProductList } from './components/ProductList.js';
+import { ProductDetail } from './components/ProductDetail.js';
+import { LogPanel } from './components/LogPanel.js';
+import { StatusBar } from './components/StatusBar.js';
+import { NotificationBanner } from './components/NotificationBanner.js';
+import { HistoryView } from './components/HistoryView.js';
+import { theme } from './theme.js';
 
-/**
- * Main TUI Application Component
- */
-const App: React.FC = () => {
+type AppView = 'main' | 'history';
+
+const AppContent: React.FC = () => {
   const { exit } = useApp();
+  const { stdout } = useStdout();
+  const terminalHeight = stdout?.rows ?? 24;
+  const terminalWidth = stdout?.columns ?? 80;
 
-  // Connect to daemon via IPC
+  const [appView, setAppView] = useState<AppView>('main');
+
   const {
     connected,
     lastHeartbeat,
     products,
     logs,
     error,
+    polling,
     newProductNotification,
     forcePoll,
     clearError,
-  } = useDaemon();
+  } = useDaemonContext();
 
   // Product selection and filtering
   const {
@@ -43,46 +48,68 @@ const App: React.FC = () => {
 
   // Keyboard input handling
   useInput((input, key) => {
+    // Handle escape key based on current view
+    if (key.escape) {
+      if (appView === 'history') {
+        setAppView('main');
+      } else if (viewMode === 'detail') {
+        switchView('list');
+      } else {
+        exit();
+      }
+      return;
+    }
+
+    // Handle 'b' key to go back from history view
+    if (input === 'b' && appView === 'history') {
+      setAppView('main');
+      return;
+    }
+
     // Quit application
-    if (input === 'q' || key.escape) {
+    if (input === 'q') {
       exit();
       return;
     }
 
-    // Navigation
-    if (key.upArrow || input === 'k') {
-      selectPrevious();
-    } else if (key.downArrow || input === 'j') {
-      selectNext();
+    // Open history view (only from main view)
+    if (input === 'h' && appView === 'main') {
+      setAppView('history');
+      return;
     }
 
-    // Toggle view
-    if (key.return || input === ' ') {
-      if (viewMode === 'list') {
-        switchView('detail');
-      } else {
-        switchView('list');
+    // Only handle main view navigation when in main view
+    if (appView === 'main') {
+      // Navigation
+      if (key.upArrow || input === 'k') {
+        selectPrevious();
+      } else if (key.downArrow || input === 'j') {
+        selectNext();
       }
-    }
 
-    // Force poll
-    if (input === 'f') {
-      forcePoll();
-    }
+      // Toggle view
+      if (key.return || input === ' ') {
+        if (viewMode === 'list' && selectedProduct) {
+          switchView('detail');
+        } else if (viewMode === 'detail') {
+          switchView('list');
+        }
+      }
 
-    // Clear error
-    if (input === 'c' && error) {
-      clearError();
-    }
+      // Force poll
+      if (input === 'f') {
+        forcePoll();
+      }
 
-    // Back to list from detail
-    if (key.escape && viewMode === 'detail') {
-      switchView('list');
+      // Clear error
+      if (input === 'c' && error) {
+        clearError();
+      }
     }
   });
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" height={terminalHeight} width={terminalWidth}>
       {/* Header with logo and status */}
       <Header connected={connected} lastHeartbeat={lastHeartbeat} />
 
@@ -107,50 +134,109 @@ const App: React.FC = () => {
         </Box>
       )}
 
-      {/* Connection warning */}
-      {!connected && !error && (
+      {/* Disconnected — show reconnecting screen instead of dashboard */}
+      {!connected && (
         <Box
-          borderStyle="single"
-          borderColor={theme.colors.warning}
-          paddingX={1}
-          marginBottom={1}
+          flexDirection="column"
+          flexGrow={1}
+          alignItems="center"
+          justifyContent="center"
         >
-          <Text color={theme.colors.warning}>
-            {theme.symbols.warning} Waiting for daemon connection...
-          </Text>
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor={theme.colors.warning}
+            paddingX={3}
+            paddingY={1}
+          >
+            <Text color={theme.colors.warning} bold>
+              {theme.symbols.warning} Daemon not connected
+            </Text>
+            <Box marginTop={1}>
+              <Text dimColor>Attempting to reconnect...</Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>
+                If the daemon was stopped, run{' '}
+                <Text color={theme.colors.accent} bold>
+                  lumentui start
+                </Text>
+              </Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>
+                Press{' '}
+                <Text color={theme.colors.accent} bold>
+                  q
+                </Text>{' '}
+                to quit
+              </Text>
+            </Box>
+          </Box>
         </Box>
       )}
 
-      {/* Main content area */}
-      <Box flexDirection="row" marginBottom={1}>
-        {/* Left column: Product list or detail */}
-        <Box flexGrow={1} marginRight={1}>
-          {viewMode === 'list' ? (
-            <ProductList
-              products={filteredProducts}
-              selectedIndex={selectedIndex}
-              totalProducts={stats.total}
-              availableProducts={stats.available}
-            />
+      {connected && (
+        <>
+          {/* Render different views based on appView state */}
+          {appView === 'history' ? (
+            <HistoryView />
           ) : (
-            <ProductDetail product={selectedProduct} />
+            <>
+              {/* Main content area */}
+              <Box
+                flexDirection={terminalWidth >= 100 ? 'row' : 'column'}
+                flexGrow={1}
+              >
+                {/* Product list or detail */}
+                <Box flexGrow={1} marginRight={terminalWidth >= 100 ? 1 : 0}>
+                  {viewMode === 'list' || !selectedProduct ? (
+                    <ProductList
+                      products={filteredProducts}
+                      selectedIndex={selectedIndex}
+                      totalProducts={stats.total}
+                      availableProducts={stats.available}
+                    />
+                  ) : (
+                    <ProductDetail product={selectedProduct} />
+                  )}
+                </Box>
+
+                {/* Log panel — side column on wide, bottom section on narrow, hidden on tiny */}
+                {terminalWidth >= 60 && (
+                  <Box
+                    width={terminalWidth >= 100 ? '40%' : '100%'}
+                    flexDirection="column"
+                    flexGrow={1}
+                    flexShrink={0}
+                  >
+                    <LogPanel logs={logs} />
+                  </Box>
+                )}
+              </Box>
+
+              {/* Bottom status bar */}
+              <StatusBar
+                lastHeartbeat={lastHeartbeat}
+                productCount={stats.total}
+                availableCount={stats.available}
+                viewMode={viewMode}
+                polling={polling}
+                appView={appView}
+              />
+            </>
           )}
-        </Box>
-
-        {/* Right column: Log panel */}
-        <Box width="40%">
-          <LogPanel logs={logs} />
-        </Box>
-      </Box>
-
-      {/* Bottom status bar */}
-      <StatusBar
-        lastHeartbeat={lastHeartbeat}
-        productCount={stats.total}
-        availableCount={stats.available}
-        viewMode={viewMode}
-      />
+        </>
+      )}
     </Box>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <DaemonProvider>
+      <AppContent />
+    </DaemonProvider>
   );
 };
 

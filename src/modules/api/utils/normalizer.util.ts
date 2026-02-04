@@ -15,7 +15,9 @@ export class ProductNormalizer {
     // Check if any variant is available (handle empty variants array)
     const available =
       product.variants.length > 0
-        ? product.variants.some((v) => v.inventory_quantity > 0)
+        ? product.variants.some(
+            (v) => v.available === true || v.inventory_quantity > 0,
+          )
         : false;
 
     // Strip HTML from description
@@ -34,7 +36,7 @@ export class ProductNormalizer {
         title: v.title,
         price: parseFloat(v.price),
         sku: v.sku,
-        available: v.inventory_quantity > 0,
+        available: v.available === true || v.inventory_quantity > 0,
         inventoryQuantity: v.inventory_quantity,
       })),
       images: product.images.map((img) => ({

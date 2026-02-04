@@ -1,14 +1,15 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { theme } from '../theme';
-import { Product } from '../hooks/useDaemon';
+import Gradient from 'ink-gradient';
+import { theme } from '../theme.js';
+import { Product } from '../hooks/useDaemon.js';
 
 interface NotificationBannerProps {
   product: Product | null;
 }
 
 /**
- * Notification banner for new products
+ * Notification banner for new products with gradient accent
  */
 export const NotificationBanner: React.FC<NotificationBannerProps> = ({
   product,
@@ -26,43 +27,43 @@ export const NotificationBanner: React.FC<NotificationBannerProps> = ({
       marginBottom={1}
     >
       <Box>
-        <Text color={theme.colors.success} bold>
-          {theme.symbols.star} NEW PRODUCT DETECTED! {theme.symbols.star}
-        </Text>
+        <Gradient colors={['#06ffa5', '#00d4ff']}>
+          <Text bold>
+            {theme.symbols.star} NEW PRODUCT DETECTED {theme.symbols.star}
+          </Text>
+        </Gradient>
       </Box>
 
-      <Box marginTop={1}>
+      <Box marginTop={1} gap={1}>
         <Text bold color={theme.colors.text}>
           {product.title}
         </Text>
+        <Text color={theme.colors.textDim}>({product.handle})</Text>
       </Box>
 
-      <Box>
-        <Text color={theme.colors.textDim}>
-          {product.vendor} • {product.productType}
-        </Text>
-      </Box>
-
-      {product.variants.length > 0 && (
-        <Box marginTop={1}>
-          <Text color={theme.colors.accent}>
-            Price: ${product.variants[0].price}
+      {product.price > 0 && (
+        <Box gap={1}>
+          <Text color={theme.colors.accent} bold>
+            ${product.price.toFixed(2)}
           </Text>
-          <Text> • </Text>
+          <Text color={theme.colors.textDim}>•</Text>
           <Text
             color={
               product.available
                 ? theme.colors.available
                 : theme.colors.unavailable
             }
+            bold
           >
-            {product.available ? 'Available' : 'Sold Out'}
+            {product.available
+              ? `${theme.symbols.check} Available`
+              : `${theme.symbols.cross} Sold Out`}
           </Text>
         </Box>
       )}
 
       <Box marginTop={1}>
-        <Text dimColor>(This notification will disappear in 5 seconds)</Text>
+        <Text dimColor>Auto-dismiss in 20s</Text>
       </Box>
     </Box>
   );

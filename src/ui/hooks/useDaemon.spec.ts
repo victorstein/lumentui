@@ -23,6 +23,7 @@ const mockIpc = {
 
 jest.mock('node-ipc', () => mockIpc);
 
+/* eslint-disable */
 import { renderHook, act } from '@testing-library/react';
 import { useDaemon } from './useDaemon';
 import * as ipc from 'node-ipc';
@@ -113,16 +114,13 @@ describe('useDaemon', () => {
     const { result } = renderHook(() => useDaemon());
     const mockProducts = [
       {
-        id: 1,
+        id: '1',
         title: 'Test Product',
         handle: 'test-product',
-        vendor: 'Test Vendor',
-        productType: 'Test Type',
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01',
-        publishedAt: '2024-01-01',
+        price: 10,
         available: true,
-        tags: ['test'],
+        description: null,
+        url: 'https://shop.lumenalta.com/products/test-product',
         variants: [],
         images: [],
       },
@@ -142,16 +140,13 @@ describe('useDaemon', () => {
   it('should show notification on product:new event', () => {
     const { result } = renderHook(() => useDaemon());
     const mockProduct = {
-      id: 1,
+      id: '2',
       title: 'New Product',
       handle: 'new-product',
-      vendor: 'Test Vendor',
-      productType: 'Test Type',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01',
-      publishedAt: '2024-01-01',
+      price: 20,
       available: true,
-      tags: ['new'],
+      description: null,
+      url: 'https://shop.lumenalta.com/products/new-product',
       variants: [],
       images: [],
     };
@@ -166,21 +161,18 @@ describe('useDaemon', () => {
     expect(result.current.newProductNotification).toEqual(mockProduct);
   });
 
-  it('should clear notification after 5 seconds', () => {
+  it('should clear notification after 20 seconds', () => {
     jest.useFakeTimers();
 
     const { result } = renderHook(() => useDaemon());
     const mockProduct = {
-      id: 1,
+      id: '2',
       title: 'New Product',
       handle: 'new-product',
-      vendor: 'Test Vendor',
-      productType: 'Test Type',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01',
-      publishedAt: '2024-01-01',
+      price: 20,
       available: true,
-      tags: ['new'],
+      description: null,
+      url: 'https://shop.lumenalta.com/products/new-product',
       variants: [],
       images: [],
     };
@@ -194,9 +186,9 @@ describe('useDaemon', () => {
 
     expect(result.current.newProductNotification).toEqual(mockProduct);
 
-    // Fast-forward 5 seconds
+    // Fast-forward 20 seconds
     act(() => {
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(20000);
     });
 
     expect(result.current.newProductNotification).toBeNull();
@@ -234,12 +226,12 @@ describe('useDaemon', () => {
     expect(result.current.logs[0]).toEqual(logEntry);
   });
 
-  it('should keep only last 10 logs', () => {
+  it('should keep only last 100 logs', () => {
     const { result } = renderHook(() => useDaemon());
 
-    // Add 15 logs
+    // Add 110 logs
     act(() => {
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 110; i++) {
         mockEventHandlers['log']({
           level: 'info',
           message: `Log ${i}`,
@@ -248,10 +240,10 @@ describe('useDaemon', () => {
       }
     });
 
-    // Should only keep last 10
-    expect(result.current.logs).toHaveLength(10);
-    expect(result.current.logs[0].message).toBe('Log 5');
-    expect(result.current.logs[9].message).toBe('Log 14');
+    // Should only keep last 100
+    expect(result.current.logs).toHaveLength(100);
+    expect(result.current.logs[0].message).toBe('Log 10');
+    expect(result.current.logs[99].message).toBe('Log 109');
   });
 
   it('should emit force-poll event', () => {
@@ -293,16 +285,13 @@ describe('useDaemon', () => {
   it('should clear notification when clearNotification is called', () => {
     const { result } = renderHook(() => useDaemon());
     const mockProduct = {
-      id: 1,
+      id: '2',
       title: 'New Product',
       handle: 'new-product',
-      vendor: 'Test Vendor',
-      productType: 'Test Type',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01',
-      publishedAt: '2024-01-01',
+      price: 20,
       available: true,
-      tags: ['new'],
+      description: null,
+      url: 'https://shop.lumenalta.com/products/new-product',
       variants: [],
       images: [],
     };

@@ -1,17 +1,18 @@
 import React from 'react';
-import { Box, Text } from 'ink';
-import { theme } from '../theme';
-import { LogEntry } from '../hooks/useDaemon';
+import { Box, Text, useStdout } from 'ink';
+import { theme } from '../theme.js';
+import { LogEntry } from '../hooks/useDaemon.js';
+
+const MAX_LOG_BUFFER = 100;
 
 interface LogPanelProps {
   logs: LogEntry[];
 }
 
 /**
- * Log panel component showing daemon logs
+ * Log panel component showing daemon logs with dynamic updates
  */
 export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
-  // Get color based on log level
   const getLogColor = (level: string) => {
     switch (level.toLowerCase()) {
       case 'error':
@@ -28,7 +29,6 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
     }
   };
 
-  // Get symbol based on log level
   const getLogSymbol = (level: string) => {
     switch (level.toLowerCase()) {
       case 'error':
@@ -45,42 +45,61 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
     }
   };
 
-  // Format timestamp
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString();
   };
 
+  const reversedLogs = [...logs].reverse();
+
+  const { stdout } = useStdout();
+  const terminalHeight = stdout?.rows || 24;
+
+  const maxVisibleLogs = Math.max(5, terminalHeight - 12);
+  const visibleLogs = reversedLogs.slice(0, maxVisibleLogs);
+
   return (
     <Box
       flexDirection="column"
-      borderStyle="single"
+      borderStyle="round"
       borderColor={theme.colors.border}
+      flexGrow={1}
     >
       {/* Header */}
-      <Box borderStyle="single" borderColor={theme.colors.border} paddingX={1}>
+      <Box paddingX={1}>
         <Text bold color={theme.colors.primary}>
           {theme.symbols.info} Daemon Logs
         </Text>
       </Box>
+      <Box paddingX={1}>
+        <Text color={theme.colors.border}>{'─'.repeat(40)}</Text>
+      </Box>
 
       {/* Logs */}
-      <Box flexDirection="column" paddingX={1} paddingY={1} height={10}>
+      <Box flexDirection="column" paddingX={1} paddingBottom={1} flexGrow={1}>
         {logs.length === 0 ? (
           <Text color={theme.colors.textMuted}>No logs yet...</Text>
         ) : (
-          logs.map((log, index) => (
-            <Box key={index}>
-              <Text color={theme.colors.textDim}>
-                [{formatTime(log.timestamp)}]
-              </Text>
-              <Text> </Text>
-              <Text color={getLogColor(log.level)}>
-                {getLogSymbol(log.level)} {log.level.toUpperCase()}:
-              </Text>
-              <Text> </Text>
-              <Text>{log.message}</Text>
-            </Box>
-          ))
+          <>
+            {logs.length >= MAX_LOG_BUFFER && (
+              <Box paddingBottom={1}>
+                <Text color={theme.colors.textMuted} italic>
+                  {theme.symbols.info} Buffer full ({MAX_LOG_BUFFER} entries) -
+                  older logs cleared
+                </Text>
+              </Box>
+            )}
+            {visibleLogs.map((log, index) => (
+              <Box key={index} flexShrink={0}>
+                <Text color={theme.colors.textMuted}>
+                  {formatTime(log.timestamp)}{' '}
+                </Text>
+                <Text color={getLogColor(log.level)}>
+                  {getLogSymbol(log.level)}{' '}
+                </Text>
+                <Text wrap="truncate">{log.message}</Text>
+              </Box>
+            ))}
+          </>
         )}
       </Box>
     </Box>

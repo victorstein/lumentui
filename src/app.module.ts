@@ -10,12 +10,14 @@ import { StorageModule } from './modules/storage/storage.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { IpcModule } from './modules/ipc/ipc.module';
+import { PathsUtil } from './common/utils/paths.util';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: PathsUtil.getEnvFilePath(),
+      ignoreEnvFile: !PathsUtil.isDevMode(), // Skip .env file in production if it doesn't exist
     }),
     ScheduleModule.forRoot(),
     LoggerModule,

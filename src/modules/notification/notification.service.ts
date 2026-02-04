@@ -1,12 +1,10 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { execFile } from 'child_process';
 import { LoggerService } from '../../common/logger/logger.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { ProductDto } from '../api/dto/product.dto';
-
-const execAsync = promisify(exec);
+import { PriceChange, AvailabilityChange } from '../differ/differ.service';
 
 /**
  * Rate limiting configuration
@@ -17,51 +15,27 @@ const RATE_LIMIT_MINUTES = 60;
 @Injectable()
 export class NotificationService implements OnModuleInit {
   private readonly notificationCache: Map<string, number> = new Map();
-  private readonly defaultPhoneNumber: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly logger: LoggerService,
     private readonly databaseService: DatabaseService,
-  ) {
-    this.defaultPhoneNumber =
-      this.configService.get<string>('NOTIFICATION_PHONE') || '';
-    if (!this.defaultPhoneNumber) {
-      this.logger.warn(
-        'NOTIFICATION_PHONE not set in .env - notifications will require explicit phone number',
-        'NotificationService',
-      );
-    }
-  }
+  ) {}
 
   /**
    * Initialize service and rebuild rate limit cache from database
    */
-  async onModuleInit() {
+  onModuleInit(): void {
     this.rebuildRateLimitCache();
   }
 
   /**
-   * Send availability notification via WhatsApp using Clawdbot CLI
+   * Send availability notification via native macOS notifications
    *
    * @param product Product that became available
-   * @param phoneNumber Target phone number in E.164 format (e.g., +50586826131)
    * @returns Promise<boolean> - true if sent successfully
    */
-  async sendAvailabilityNotification(
-    product: ProductDto,
-    phoneNumber?: string,
-  ): Promise<boolean> {
-    const targetPhone = phoneNumber || this.defaultPhoneNumber;
-
-    if (!targetPhone) {
-      this.logger.error(
-        'Cannot send notification: no phone number provided',
-        'NotificationService',
-      );
-      return false;
-    }
-
+  async sendAvailabilityNotification(product: ProductDto): Promise<boolean> {
     // Rate limiting check
     if (this.isRateLimited(product.id)) {
       this.logger.warn(
@@ -79,19 +53,18 @@ export class NotificationService implements OnModuleInit {
         'NotificationService',
       );
 
-      // Execute Clawdbot CLI command
-      const command = `clawdbot message send --channel whatsapp --target "${targetPhone}" --message "${this.escapeMessage(message)}"`;
-
-      await execAsync(command, {
-        timeout: 10000, // 10 second timeout
-        maxBuffer: 1024 * 1024, // 1MB buffer
-      });
+      // Send native macOS notification via osascript
+      await this.sendNativeNotification(message);
 
       // Update rate limit cache
       this.notificationCache.set(product.id, Date.now());
 
-      // Record notification in database
-      this.recordNotification(product.id, true);
+      // Record notification in database with metadata
+      this.recordNotification(product.id, true, {
+        productTitle: product.title,
+        availabilityChange: this.describeAvailabilityChange(product),
+        changeType: 'new',
+      });
 
       this.logger.log(
         `Notification sent successfully for product: ${product.title}`,
@@ -99,68 +72,293 @@ export class NotificationService implements OnModuleInit {
       );
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Failed to send notification for product ${product.id}: ${error.message}`,
+        `Failed to send notification for product ${product.id}: ${errorMessage}`,
         'NotificationService',
       );
 
-      // Record failed notification
-      this.recordNotification(product.id, false);
+      // Record failed notification with error message
+      this.recordNotification(product.id, false, {
+        productTitle: product.title,
+        availabilityChange: this.describeAvailabilityChange(product),
+        errorMessage,
+        changeType: 'new',
+      });
+
+      return false;
+    }
+  }
+
+  async sendPriceChangeNotification(
+    priceChange: PriceChange,
+  ): Promise<boolean> {
+    const {
+      product,
+      oldPrice,
+      newPrice,
+      oldCompareAtPrice,
+      newCompareAtPrice,
+    } = priceChange;
+
+    if (this.isRateLimited(product.id)) {
+      this.logger.warn(
+        `Rate limit hit for product ${product.id} - skipping notification`,
+        'NotificationService',
+      );
+      return false;
+    }
+
+    try {
+      const priceDescription = this.describePriceChange(oldPrice, newPrice);
+      const message = this.formatPriceChangeMessage(
+        product,
+        priceDescription,
+        oldPrice,
+        newPrice,
+        oldCompareAtPrice,
+        newCompareAtPrice,
+      );
+
+      this.logger.log(
+        `Sending price change notification for product: ${product.title}`,
+        'NotificationService',
+      );
+
+      await this.sendNativeNotification(message, 'Price Change');
+
+      this.notificationCache.set(product.id, Date.now());
+
+      this.recordNotification(product.id, true, {
+        productTitle: product.title,
+        availabilityChange: `price ${priceDescription}`,
+        changeType: 'price_change',
+        oldValue: { price: oldPrice, compareAtPrice: oldCompareAtPrice },
+        newValue: { price: newPrice, compareAtPrice: newCompareAtPrice },
+      });
+
+      this.logger.log(
+        `Price change notification sent successfully for product: ${product.title}`,
+        'NotificationService',
+      );
+
+      return true;
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to send price change notification for product ${product.id}: ${errorMessage}`,
+        'NotificationService',
+      );
+
+      const priceDescription = this.describePriceChange(oldPrice, newPrice);
+      this.recordNotification(product.id, false, {
+        productTitle: product.title,
+        availabilityChange: `price ${priceDescription}`,
+        errorMessage,
+        changeType: 'price_change',
+        oldValue: { price: oldPrice, compareAtPrice: oldCompareAtPrice },
+        newValue: { price: newPrice, compareAtPrice: newCompareAtPrice },
+      });
+
+      return false;
+    }
+  }
+
+  async sendAvailabilityChangeNotification(
+    availabilityChange: AvailabilityChange,
+  ): Promise<boolean> {
+    const { product, wasAvailable, isAvailable } = availabilityChange;
+
+    if (this.isRateLimited(product.id)) {
+      this.logger.warn(
+        `Rate limit hit for product ${product.id} - skipping notification`,
+        'NotificationService',
+      );
+      return false;
+    }
+
+    try {
+      const changeDescription = this.describeAvailabilityChangeStatus(
+        wasAvailable,
+        isAvailable,
+      );
+      const message = this.formatAvailabilityChangeMessage(
+        product,
+        changeDescription,
+      );
+
+      this.logger.log(
+        `Sending availability change notification for product: ${product.title}`,
+        'NotificationService',
+      );
+
+      await this.sendNativeNotification(message, 'Availability Update');
+
+      this.notificationCache.set(product.id, Date.now());
+
+      this.recordNotification(product.id, true, {
+        productTitle: product.title,
+        availabilityChange: changeDescription,
+        changeType: 'availability_change',
+        oldValue: { available: wasAvailable },
+        newValue: { available: isAvailable },
+      });
+
+      this.logger.log(
+        `Availability change notification sent successfully for product: ${product.title}`,
+        'NotificationService',
+      );
+
+      return true;
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to send availability change notification for product ${product.id}: ${errorMessage}`,
+        'NotificationService',
+      );
+
+      const changeDescription = this.describeAvailabilityChangeStatus(
+        wasAvailable,
+        isAvailable,
+      );
+      this.recordNotification(product.id, false, {
+        productTitle: product.title,
+        availabilityChange: changeDescription,
+        errorMessage,
+        changeType: 'availability_change',
+        oldValue: { available: wasAvailable },
+        newValue: { available: isAvailable },
+      });
 
       return false;
     }
   }
 
   /**
-   * Format a beautiful WhatsApp message with product details
+   * Format a concise notification message for macOS notification center
    */
   private formatNotificationMessage(product: ProductDto): string {
     const lines: string[] = [];
 
-    lines.push('🔔 *PRODUCTO DISPONIBLE* 🔔');
-    lines.push('');
-    lines.push(`📦 *${product.title}*`);
-    lines.push('');
+    lines.push(`${product.title}`);
 
     if (product.price > 0) {
-      lines.push(`💰 Precio: *$${product.price.toFixed(2)}*`);
+      lines.push(`Price: $${product.price.toFixed(2)}`);
     }
 
     // Show available variants count
     const availableVariants = product.variants.filter((v) => v.available);
     if (availableVariants.length > 0) {
-      lines.push(`📊 Variantes disponibles: *${availableVariants.length}*`);
-
-      // List variants if not too many
-      if (availableVariants.length <= 5) {
-        availableVariants.forEach((variant) => {
-          const stock =
-            variant.inventoryQuantity > 0
-              ? ` (${variant.inventoryQuantity} en stock)`
-              : '';
-          lines.push(`   • ${variant.title}${stock}`);
-        });
-      }
+      lines.push(`${availableVariants.length} variant(s) available`);
     }
 
-    lines.push('');
-    lines.push(`🔗 ${product.url}`);
-    lines.push('');
-    lines.push('_¡Compra ahora antes de que se agote!_ 🚀');
+    lines.push(`${product.url}`);
+
+    return lines.join('\n');
+  }
+
+  private formatPriceChangeMessage(
+    product: ProductDto,
+    priceDescription: string,
+    oldPrice: number,
+    newPrice: number,
+    oldCompareAtPrice?: number,
+    newCompareAtPrice?: number,
+  ): string {
+    const lines: string[] = [];
+
+    lines.push(`${product.title}`);
+    lines.push(`Price ${priceDescription}`);
+    lines.push(`Was: $${oldPrice.toFixed(2)} → Now: $${newPrice.toFixed(2)}`);
+
+    if (oldCompareAtPrice !== newCompareAtPrice && newCompareAtPrice) {
+      lines.push(`Compare at: $${newCompareAtPrice.toFixed(2)}`);
+    }
+
+    lines.push(`${product.url}`);
+
+    return lines.join('\n');
+  }
+
+  private formatAvailabilityChangeMessage(
+    product: ProductDto,
+    changeDescription: string,
+  ): string {
+    const lines: string[] = [];
+
+    lines.push(`${product.title}`);
+    lines.push(`${changeDescription}`);
+
+    if (product.price > 0) {
+      lines.push(`Price: $${product.price.toFixed(2)}`);
+    }
+
+    lines.push(`${product.url}`);
 
     return lines.join('\n');
   }
 
   /**
-   * Escape special characters for shell command
+   * Describe the availability change for a product
    */
-  private escapeMessage(message: string): string {
-    return message
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$')
-      .replace(/`/g, '\\`');
+  private describeAvailabilityChange(product: ProductDto): string {
+    const availableVariants = product.variants.filter((v) => v.available);
+
+    if (product.available && availableVariants.length > 0) {
+      return `became available (${availableVariants.length} variant(s))`;
+    } else if (product.available) {
+      return 'became available';
+    } else {
+      return 'sold out';
+    }
+  }
+
+  private describePriceChange(oldPrice: number, newPrice: number): string {
+    if (newPrice < oldPrice) {
+      return `dropped from $${oldPrice.toFixed(2)} to $${newPrice.toFixed(2)}`;
+    } else {
+      return `increased from $${oldPrice.toFixed(2)} to $${newPrice.toFixed(2)}`;
+    }
+  }
+
+  private describeAvailabilityChangeStatus(
+    wasAvailable: boolean,
+    isAvailable: boolean,
+  ): string {
+    if (!wasAvailable && isAvailable) {
+      return 'back in stock';
+    } else if (wasAvailable && !isAvailable) {
+      return 'sold out';
+    } else if (!wasAvailable && !isAvailable) {
+      return 'still unavailable';
+    } else {
+      return 'became available';
+    }
+  }
+
+  /**
+   * Send a native macOS notification via osascript.
+   * Works reliably from detached daemon processes.
+   */
+  private sendNativeNotification(
+    message: string,
+    subtitle: string = 'New Product Available',
+  ): Promise<void> {
+    const escaped = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const script = `display notification "${escaped}" with title "LumenTUI" subtitle "${subtitle}" sound name "default"`;
+    return new Promise<void>((resolve, reject) => {
+      execFile('osascript', ['-e', script], (error: Error | null) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
   }
 
   /**
@@ -182,53 +380,130 @@ export class NotificationService implements OnModuleInit {
   /**
    * Record notification in database
    */
-  private recordNotification(productId: string, sent: boolean): void {
-    try {
-      const db = this.databaseService.getDatabase();
-
-      db.prepare(
-        `
-        INSERT INTO notifications (product_id, timestamp, sent)
-        VALUES (?, ?, ?)
-      `,
-      ).run(productId, Date.now(), sent ? 1 : 0);
-
-      this.logger.log(
-        `Recorded notification for product ${productId} (sent: ${sent})`,
-        'NotificationService',
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to record notification: ${error.message}`,
-        'NotificationService',
-      );
-    }
+  private recordNotification(
+    productId: string,
+    sent: boolean,
+    metadata?: {
+      productTitle?: string;
+      availabilityChange?: string;
+      errorMessage?: string;
+      changeType?: 'new' | 'price_change' | 'availability_change';
+      oldValue?: Record<string, unknown>;
+      newValue?: Record<string, unknown>;
+    },
+  ): void {
+    this.databaseService.recordNotification(productId, sent, metadata);
   }
 
   /**
    * Get notification history for a product
    */
   getNotificationHistory(productId: string, limit: number = 10): any[] {
-    try {
-      const db = this.databaseService.getDatabase();
+    return this.databaseService.getNotificationHistory({ productId, limit });
+  }
 
-      return db
-        .prepare(
-          `
-          SELECT * FROM notifications 
-          WHERE product_id = ? 
-          ORDER BY timestamp DESC 
-          LIMIT ?
-        `,
-        )
-        .all(productId, limit);
-    } catch (error) {
+  /**
+   * Get formatted notification history with filters
+   * Transforms raw database entities into easily consumable format for CLI/TUI
+   */
+  getFormattedHistory(filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    productId?: string;
+    status?: 'sent' | 'failed';
+    limit?: number;
+    offset?: number;
+  }): Array<{
+    id: number;
+    productId: string;
+    productTitle: string | null;
+    timestamp: number;
+    formattedTimestamp: string;
+    status: 'sent' | 'failed';
+    availabilityChange: string | null;
+    errorMessage: string | null;
+  }> {
+    try {
+      const rawHistory = this.databaseService.getNotificationHistory(filters);
+
+      return rawHistory.map((notification) => ({
+        id: notification.id || 0,
+        productId: notification.product_id,
+        productTitle: notification.product_title || null,
+        timestamp: notification.timestamp,
+        formattedTimestamp: this.formatTimestamp(notification.timestamp),
+        status: notification.sent === 1 ? 'sent' : 'failed',
+        availabilityChange: notification.availability_change || null,
+        errorMessage: notification.error_message || null,
+      }));
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Failed to get notification history: ${error.message}`,
+        `Failed to get formatted notification history: ${errorMessage}`,
         'NotificationService',
       );
       return [];
     }
+  }
+
+  /**
+   * Get notification statistics
+   */
+  getNotificationStats(): {
+    totalSent: number;
+    totalFailed: number;
+    countByProduct: Array<{
+      productId: string;
+      productTitle: string | null;
+      sentCount: number;
+      failedCount: number;
+      totalCount: number;
+    }>;
+  } {
+    try {
+      const stats = this.databaseService.getNotificationStats();
+
+      return {
+        totalSent: stats.totalSent,
+        totalFailed: stats.totalFailed,
+        countByProduct: stats.countByProduct.map((item) => ({
+          productId: item.product_id,
+          productTitle: item.product_title,
+          sentCount: item.sent_count,
+          failedCount: item.failed_count,
+          totalCount: item.sent_count + item.failed_count,
+        })),
+      };
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to get notification stats: ${errorMessage}`,
+        'NotificationService',
+      );
+      return {
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      };
+    }
+  }
+
+  /**
+   * Format timestamp to human-readable string
+   */
+  private formatTimestamp(timestamp: number): string {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
   }
 
   /**
@@ -237,25 +512,12 @@ export class NotificationService implements OnModuleInit {
    */
   private rebuildRateLimitCache(): void {
     try {
-      const db = this.databaseService.getDatabase();
-
       // Calculate timestamp threshold (current time - rate limit window)
       const rateLimitThreshold = Date.now() - RATE_LIMIT_MINUTES * 60 * 1000;
 
       // Get last successful notification for each product within rate limit window
-      const recentNotifications = db
-        .prepare(
-          `
-          SELECT product_id, MAX(timestamp) as last_sent
-          FROM notifications
-          WHERE sent = 1 AND timestamp > ?
-          GROUP BY product_id
-        `,
-        )
-        .all(rateLimitThreshold) as Array<{
-        product_id: string;
-        last_sent: number;
-      }>;
+      const recentNotifications =
+        this.databaseService.getRecentNotifications(rateLimitThreshold);
 
       // Rebuild cache
       this.notificationCache.clear();
@@ -267,9 +529,11 @@ export class NotificationService implements OnModuleInit {
         `Rate limit cache rebuilt with ${recentNotifications.length} entries`,
         'NotificationService',
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Failed to rebuild rate limit cache: ${error.message}`,
+        `Failed to rebuild rate limit cache: ${errorMessage}`,
         'NotificationService',
       );
     }
@@ -332,6 +596,42 @@ export class NotificationService implements OnModuleInit {
 
     // If neither filter is set, or all checks pass, notify
     return true;
+  }
+
+  shouldNotifyPriceChange(
+    product: ProductDto,
+    priceChange: PriceChange,
+  ): boolean {
+    const thresholdStr = this.configService.get<string>(
+      'LUMENTUI_NOTIFY_PRICE_THRESHOLD',
+      '0',
+    );
+    const threshold = parseFloat(thresholdStr) || 0;
+
+    if (threshold > 0 && priceChange.oldPrice > 0) {
+      const percentChange = Math.abs(
+        ((priceChange.newPrice - priceChange.oldPrice) / priceChange.oldPrice) *
+          100,
+      );
+
+      if (percentChange < threshold) {
+        this.logger.log(
+          `Price change ${percentChange.toFixed(2)}% below threshold ${threshold}% for product ${product.id}`,
+          'NotificationService',
+        );
+        return false;
+      }
+    }
+
+    return this.shouldNotify(product);
+  }
+
+  shouldNotifyAvailabilityChange(
+    product: ProductDto,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    availabilityChange: AvailabilityChange,
+  ): boolean {
+    return this.shouldNotify(product);
   }
 
   /**

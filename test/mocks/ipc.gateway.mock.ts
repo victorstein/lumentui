@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { Injectable, Logger } from '@nestjs/common';
 import { ProductDto } from '../../src/modules/api/dto/product.dto';
 
@@ -21,7 +22,7 @@ export class MockIpcGateway {
     this.isServerRunning = false;
   }
 
-  setSchedulerService(schedulerService: any): void {
+  setSchedulerService(_schedulerService: any): void {
     // Mock implementation - no-op
   }
 

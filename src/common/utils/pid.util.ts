@@ -1,12 +1,9 @@
 import * as fs from 'fs';
-import * as path from 'path';
+import { PathsUtil } from './paths.util';
 
 export class PidManager {
-  private static readonly DATA_DIR = path.join(process.cwd(), 'data');
-  private static readonly PID_FILE = path.join(
-    PidManager.DATA_DIR,
-    'daemon.pid',
-  );
+  private static readonly DATA_DIR = PathsUtil.getDataDir();
+  private static readonly PID_FILE = PathsUtil.getPidFilePath();
 
   /**
    * Ensure data directory exists
@@ -56,7 +53,7 @@ export class PidManager {
       // process.kill with signal 0 doesn't kill the process, just checks if it exists
       process.kill(pid, 0);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

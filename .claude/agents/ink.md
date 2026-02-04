@@ -11,11 +11,11 @@ Ink TUI specialist for building terminal user interfaces with React.
 
 ## Tech Stack
 
-| Component      | Technology         |
-| -------------- | ------------------ |
-| TUI Framework  | Ink 5              |
-| React          | React 18           |
-| IPC Client     | node-ipc           |
+| Component     | Technology |
+| ------------- | ---------- |
+| TUI Framework | Ink 5      |
+| React         | React 18   |
+| IPC Client    | node-ipc   |
 
 ## Project Structure
 
@@ -45,11 +45,49 @@ src/ui/
 - **Layout:** `<Box>` with flexDirection, `<Text>` with color/bold/dim from Ink
 - **Date formatting:** Uses `toLocaleString()` — no external date library
 
+## Code Standards
+
+### Self-Documenting Code (Comments Restricted)
+
+**CRITICAL:** Code must be self-documenting. Comments are restricted to only critical scenarios.
+
+Write clear code through:
+
+- Descriptive variable/function names
+- Small, focused functions
+- TypeScript types that convey intent
+
+**ONLY comment for:**
+
+- Complex algorithms where "why" isn't obvious
+- Workarounds for bugs (with ESLint justifications)
+- Security-sensitive code
+
+**NEVER comment for:**
+
+- What code does (code should show this)
+- Obvious operations
+- Function purposes (name should convey this)
+
+**Before commenting, ask:**
+
+1. Can I rename to make this clearer?
+2. Can I refactor into smaller functions?
+3. Can I use types to convey this?
+
+### Module Resolution (ESM/CommonJS)
+
+**ALWAYS use `PathsUtil` for file paths** — never use `__dirname` or `import.meta` directly.
+
+`PathsUtil.getDirname()` handles both CommonJS (tests) and ESM (production) using a `Function()` wrapper to hide `import.meta` from Jest's parser.
+
+See `src/common/utils/paths.util.ts:19-31` for the canonical implementation.
+
 ## Quick Commands
 
 ```bash
-npm run build        # Build (includes TUI)
-npm test             # Run tests (includes useDaemon.spec.ts)
+pnpm run build        # Build (includes TUI)
+pnpm test             # Run tests (includes useDaemon.spec.ts)
 ```
 
 ## Task Completion

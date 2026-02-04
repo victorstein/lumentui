@@ -1,6 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { IpcGateway } from './ipc.gateway';
+import { NotificationService } from '../notification/notification.service';
 import * as ipc from 'node-ipc';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
@@ -39,14 +42,31 @@ jest.mock('child_process', () => ({
   exec: jest.fn(),
 }));
 
+// Mock PathsUtil
+jest.mock('../../common/utils/paths.util', () => ({
+  PathsUtil: {
+    getIpcSocketPath: jest.fn(() => '/tmp/lumentui.sock'),
+  },
+}));
+
 describe('IpcGateway', () => {
   let gateway: IpcGateway;
   let module: TestingModule;
-  let configService: any;
+  let _configService: any;
+  let mockNotificationService: any;
 
   beforeEach(async () => {
     // Reset mocks
     jest.clearAllMocks();
+
+    mockNotificationService = {
+      getFormattedHistory: jest.fn().mockReturnValue([]),
+      getNotificationStats: jest.fn().mockReturnValue({
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      }),
+    };
 
     module = await Test.createTestingModule({
       providers: [
@@ -62,11 +82,15 @@ describe('IpcGateway', () => {
             }),
           },
         },
+        {
+          provide: NotificationService,
+          useValue: mockNotificationService,
+        },
       ],
     }).compile();
 
     gateway = module.get<IpcGateway>(IpcGateway);
-    configService = module.get<ConfigService>(ConfigService);
+    _configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(async () => {
@@ -110,6 +134,14 @@ describe('IpcGateway', () => {
         'force-poll',
         expect.any(Function),
       );
+      expect(ipc.server.on).toHaveBeenCalledWith(
+        'getNotificationHistory',
+        expect.any(Function),
+      );
+      expect(ipc.server.on).toHaveBeenCalledWith(
+        'getNotificationStats',
+        expect.any(Function),
+      );
       expect(ipc.server.on).toHaveBeenCalledWith('error', expect.any(Function));
     });
 
@@ -117,6 +149,7 @@ describe('IpcGateway', () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       (child_process.exec as jest.Mock).mockImplementation((cmd, callback) => {
         // Simulate lsof returning error (socket not in use)
+
         callback({ code: 1 }, '', '');
       });
 
@@ -127,11 +160,21 @@ describe('IpcGateway', () => {
       expect(ipc.server.start).toHaveBeenCalled();
     });
 
-    it('should clean up socket file on graceful shutdown', async () => {
+    it('should not clean up socket file on module destroy (deferred to cleanupSocket)', async () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
 
       await gateway.onModuleInit();
+      (fs.unlinkSync as jest.Mock).mockClear();
       gateway.onModuleDestroy();
+
+      expect(fs.unlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('should clean up socket file when cleanupSocket is called', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+
+      await gateway.onModuleInit();
+      gateway.cleanupSocket();
 
       expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/lumentui.sock');
     });
@@ -230,6 +273,86 @@ describe('IpcGateway', () => {
         timestamp: expect.any(Number),
       });
     });
+
+    it('should emit product price change', () => {
+      const priceChange = {
+        product: {
+          id: 'prod1',
+          title: 'Test Product',
+          handle: 'test-product',
+          url: 'https://shop.lumenalta.com/products/test-product',
+          vendor: 'Vendor',
+          product_type: 'Type',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          published_at: '2024-01-01T00:00:00Z',
+          status: 'active',
+          variants: [],
+          images: [],
+          tags: [],
+          options: [],
+          price: 15.0,
+          compareAtPrice: 20.0,
+          available: true,
+        },
+        oldPrice: 10.0,
+        newPrice: 15.0,
+        oldCompareAtPrice: 18.0,
+        newCompareAtPrice: 20.0,
+      };
+
+      gateway.emitProductPriceChanged(priceChange);
+
+      expect(ipc.server.broadcast).toHaveBeenCalledWith(
+        'product:price-changed',
+        {
+          product: priceChange.product,
+          oldPrice: 10.0,
+          newPrice: 15.0,
+          oldCompareAtPrice: 18.0,
+          newCompareAtPrice: 20.0,
+          timestamp: expect.any(Number),
+        },
+      );
+    });
+
+    it('should emit product availability change', () => {
+      const availabilityChange = {
+        product: {
+          id: 'prod1',
+          title: 'Test Product',
+          handle: 'test-product',
+          url: 'https://shop.lumenalta.com/products/test-product',
+          vendor: 'Vendor',
+          product_type: 'Type',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          published_at: '2024-01-01T00:00:00Z',
+          status: 'active',
+          variants: [],
+          images: [],
+          tags: [],
+          options: [],
+          price: 10.0,
+          compareAtPrice: null,
+          available: true,
+        },
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      gateway.emitProductAvailabilityChanged(availabilityChange);
+
+      expect(ipc.server.broadcast).toHaveBeenCalledWith(
+        'product:availability-changed',
+        {
+          product: availabilityChange.product,
+          wasAvailable: false,
+          isAvailable: true,
+          timestamp: expect.any(Number),
+        },
+      );
+    });
   });
 
   describe('Status', () => {
@@ -268,10 +391,62 @@ describe('IpcGateway', () => {
 
   describe('Edge Cases', () => {
     it('should not emit events when server is not running', () => {
+      const priceChange = {
+        product: {
+          id: 'prod1',
+          title: 'Test Product',
+          handle: 'test-product',
+          url: 'https://shop.lumenalta.com/products/test-product',
+          vendor: 'Vendor',
+          product_type: 'Type',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          published_at: '2024-01-01T00:00:00Z',
+          status: 'active',
+          variants: [],
+          images: [],
+          tags: [],
+          options: [],
+          price: 15.0,
+          compareAtPrice: 20.0,
+          available: true,
+        },
+        oldPrice: 10.0,
+        newPrice: 15.0,
+        oldCompareAtPrice: 18.0,
+        newCompareAtPrice: 20.0,
+      };
+
+      const availabilityChange = {
+        product: {
+          id: 'prod1',
+          title: 'Test Product',
+          handle: 'test-product',
+          url: 'https://shop.lumenalta.com/products/test-product',
+          vendor: 'Vendor',
+          product_type: 'Type',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          published_at: '2024-01-01T00:00:00Z',
+          status: 'active',
+          variants: [],
+          images: [],
+          tags: [],
+          options: [],
+          price: 10.0,
+          compareAtPrice: null,
+          available: true,
+        },
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
       gateway.emitHeartbeat(Date.now());
       gateway.emitProductsUpdated([]);
       gateway.emitError('error');
       gateway.emitLog('info', 'message');
+      gateway.emitProductPriceChanged(priceChange);
+      gateway.emitProductAvailabilityChanged(availabilityChange);
 
       expect(ipc.server.broadcast).not.toHaveBeenCalled();
     });
@@ -282,6 +457,128 @@ describe('IpcGateway', () => {
 
       // Should only be called once
       expect(ipc.serve).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Log Buffer', () => {
+    beforeEach(async () => {
+      await gateway.onModuleInit();
+    });
+
+    it('should store logs in buffer', () => {
+      gateway.emitLog('info', 'Test message 1');
+      gateway.emitLog('warn', 'Test message 2');
+
+      expect(ipc.server.broadcast).toHaveBeenCalledTimes(2);
+      expect(ipc.server.broadcast).toHaveBeenCalledWith(
+        'log',
+        expect.objectContaining({
+          level: 'info',
+          message: 'Test message 1',
+          timestamp: expect.any(Number),
+        }),
+      );
+    });
+
+    it('should not exceed max buffer size', () => {
+      for (let i = 0; i < 150; i++) {
+        gateway.emitLog('info', `Message ${i}`);
+      }
+
+      expect(ipc.server.broadcast).toHaveBeenCalledTimes(150);
+    });
+
+    it('should send log history to newly connected client', () => {
+      gateway.emitLog('info', 'Message 1');
+      gateway.emitLog('warn', 'Message 2');
+      gateway.emitLog('error', 'Message 3');
+
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const connectCall = calls.find((call) => call[0] === 'connect');
+      const connectHandler = connectCall[1];
+
+      const mockSocket = { id: 'test-socket' };
+      connectHandler(mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(mockSocket, 'log', {
+        level: 'info',
+        message: 'Message 1',
+        timestamp: expect.any(Number),
+      });
+      expect(ipc.server.emit).toHaveBeenCalledWith(mockSocket, 'log', {
+        level: 'warn',
+        message: 'Message 2',
+        timestamp: expect.any(Number),
+      });
+      expect(ipc.server.emit).toHaveBeenCalledWith(mockSocket, 'log', {
+        level: 'error',
+        message: 'Message 3',
+        timestamp: expect.any(Number),
+      });
+    });
+
+    it('should send logs in chronological order on connect', () => {
+      const emitCalls: any[] = [];
+      (ipc.server.emit as jest.Mock).mockImplementation(
+        (socket: any, event: string, data: any) => {
+          if (event === 'log') {
+            emitCalls.push(data);
+          }
+        },
+      );
+
+      gateway.emitLog('info', 'First');
+      gateway.emitLog('warn', 'Second');
+      gateway.emitLog('error', 'Third');
+
+      emitCalls.length = 0;
+
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const connectCall = calls.find((call) => call[0] === 'connect');
+      const connectHandler = connectCall[1];
+
+      const mockSocket = { id: 'test-socket' };
+      connectHandler(mockSocket);
+
+      expect(emitCalls.length).toBe(3);
+      expect(emitCalls[0].message).toBe('First');
+      expect(emitCalls[1].message).toBe('Second');
+      expect(emitCalls[2].message).toBe('Third');
+    });
+
+    it('should maintain circular buffer (oldest removed first)', () => {
+      const emitCalls: any[] = [];
+      (ipc.server.broadcast as jest.Mock).mockImplementation(
+        (event: string, data: any) => {
+          if (event === 'log') {
+            emitCalls.push(data);
+          }
+        },
+      );
+
+      for (let i = 0; i < 110; i++) {
+        gateway.emitLog('info', `Message ${i}`);
+      }
+
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const connectCall = calls.find((call) => call[0] === 'connect');
+      const connectHandler = connectCall[1];
+
+      const sentLogs: any[] = [];
+      (ipc.server.emit as jest.Mock).mockImplementation(
+        (socket: any, event: string, data: any) => {
+          if (event === 'log') {
+            sentLogs.push(data);
+          }
+        },
+      );
+
+      const mockSocket = { id: 'test-socket' };
+      connectHandler(mockSocket);
+
+      expect(sentLogs.length).toBe(100);
+      expect(sentLogs[0].message).toBe('Message 10');
+      expect(sentLogs[99].message).toBe('Message 109');
     });
   });
 
@@ -388,6 +685,290 @@ describe('IpcGateway', () => {
         expect.objectContaining({
           success: false,
           error: 'SchedulerService not available',
+        }),
+      );
+    });
+  });
+
+  describe('Notification History Handler', () => {
+    let notificationHistoryHandler: (data: any, socket: any) => void;
+    const mockSocket = { id: 'test-socket' };
+
+    beforeEach(async () => {
+      await gateway.onModuleInit();
+
+      // Extract the getNotificationHistory handler
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const historyCall = calls.find(
+        (call) => call[0] === 'getNotificationHistory',
+      );
+      notificationHistoryHandler = historyCall[1];
+    });
+
+    it('should handle getNotificationHistory with successful result', () => {
+      const mockHistory = [
+        {
+          id: 1,
+          productId: 'prod-123',
+          productTitle: 'Test Product',
+          timestamp: Date.now(),
+          formattedTimestamp: '01/01/2024, 12:00:00',
+          status: 'sent',
+          availabilityChange: 'became available',
+          errorMessage: null,
+        },
+      ];
+
+      mockNotificationService.getFormattedHistory.mockReturnValue(mockHistory);
+
+      notificationHistoryHandler({}, mockSocket);
+
+      expect(mockNotificationService.getFormattedHistory).toHaveBeenCalledWith(
+        {},
+      );
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'getNotificationHistory-result',
+        expect.objectContaining({
+          success: true,
+          history: mockHistory,
+          count: 1,
+        }),
+      );
+    });
+
+    it('should handle getNotificationHistory with filters', () => {
+      const filters = {
+        dateFrom: '2024-01-01',
+        dateTo: '2024-12-31',
+        productId: 'prod-123',
+        status: 'sent',
+        limit: 50,
+        offset: 10,
+      };
+
+      const mockHistory = [
+        {
+          id: 1,
+          productId: 'prod-123',
+          productTitle: 'Test Product',
+          timestamp: Date.now(),
+          formattedTimestamp: '01/01/2024, 12:00:00',
+          status: 'sent',
+          availabilityChange: 'became available',
+          errorMessage: null,
+        },
+      ];
+
+      mockNotificationService.getFormattedHistory.mockReturnValue(mockHistory);
+
+      notificationHistoryHandler(filters, mockSocket);
+
+      expect(mockNotificationService.getFormattedHistory).toHaveBeenCalledWith({
+        dateFrom: '2024-01-01',
+        dateTo: '2024-12-31',
+        productId: 'prod-123',
+        status: 'sent',
+        limit: 50,
+        offset: 10,
+      });
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'getNotificationHistory-result',
+        expect.objectContaining({
+          success: true,
+          history: mockHistory,
+          count: 1,
+        }),
+      );
+    });
+
+    it('should handle getNotificationHistory with empty result', () => {
+      mockNotificationService.getFormattedHistory.mockReturnValue([]);
+
+      notificationHistoryHandler({}, mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'getNotificationHistory-result',
+        expect.objectContaining({
+          success: true,
+          history: [],
+          count: 0,
+        }),
+      );
+    });
+
+    it('should handle getNotificationHistory when service throws error', () => {
+      mockNotificationService.getFormattedHistory.mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      notificationHistoryHandler({}, mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'getNotificationHistory-result',
+        expect.objectContaining({
+          success: false,
+          history: [],
+          count: 0,
+          error: 'Database error',
+        }),
+      );
+    });
+
+    it('should sanitize invalid filter types', () => {
+      const invalidFilters = {
+        dateFrom: 123, // should be string
+        dateTo: true, // should be string
+        productId: null, // should be string
+        status: 'invalid', // should be 'sent' or 'failed'
+        limit: 'invalid', // should be number
+        offset: -5, // should be >= 0
+      };
+
+      mockNotificationService.getFormattedHistory.mockReturnValue([]);
+
+      notificationHistoryHandler(invalidFilters, mockSocket);
+
+      // Should pass empty object since all filters are invalid
+      expect(mockNotificationService.getFormattedHistory).toHaveBeenCalledWith(
+        {},
+      );
+    });
+
+    it('should handle partial valid filters', () => {
+      const partialFilters = {
+        productId: 'prod-123',
+        limit: 10,
+        invalidField: 'should be ignored',
+      };
+
+      mockNotificationService.getFormattedHistory.mockReturnValue([]);
+
+      notificationHistoryHandler(partialFilters, mockSocket);
+
+      // Should only pass valid filters
+      expect(mockNotificationService.getFormattedHistory).toHaveBeenCalledWith({
+        productId: 'prod-123',
+        limit: 10,
+      });
+    });
+  });
+
+  describe('Notification Stats Handler', () => {
+    let notificationStatsHandler: (data: any, socket: any) => void;
+    const mockSocket = { id: 'test-socket' };
+
+    beforeEach(async () => {
+      await gateway.onModuleInit();
+
+      // Extract the getNotificationStats handler
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const statsCall = calls.find(
+        (call) => call[0] === 'getNotificationStats',
+      );
+      notificationStatsHandler = statsCall[1];
+    });
+
+    it('should handle getNotificationStats with successful result', () => {
+      const mockStats = {
+        totalSent: 10,
+        totalFailed: 2,
+        countByProduct: [
+          {
+            productId: 'prod-123',
+            productTitle: 'Test Product',
+            sentCount: 5,
+            failedCount: 1,
+            totalCount: 6,
+          },
+          {
+            productId: 'prod-456',
+            productTitle: 'Another Product',
+            sentCount: 5,
+            failedCount: 1,
+            totalCount: 6,
+          },
+        ],
+      };
+
+      mockNotificationService.getNotificationStats.mockReturnValue(mockStats);
+
+      notificationStatsHandler({}, mockSocket);
+
+      expect(mockNotificationService.getNotificationStats).toHaveBeenCalled();
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'getNotificationStats-result',
+        expect.objectContaining({
+          success: true,
+          stats: mockStats,
+        }),
+      );
+    });
+
+    it('should handle getNotificationStats with empty stats', () => {
+      const emptyStats = {
+        totalSent: 0,
+        totalFailed: 0,
+        countByProduct: [],
+      };
+
+      mockNotificationService.getNotificationStats.mockReturnValue(emptyStats);
+
+      notificationStatsHandler({}, mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'getNotificationStats-result',
+        expect.objectContaining({
+          success: true,
+          stats: emptyStats,
+        }),
+      );
+    });
+
+    it('should handle getNotificationStats when service throws error', () => {
+      mockNotificationService.getNotificationStats.mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      notificationStatsHandler({}, mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'getNotificationStats-result',
+        expect.objectContaining({
+          success: false,
+          stats: {
+            totalSent: 0,
+            totalFailed: 0,
+            countByProduct: [],
+          },
+          error: 'Database error',
+        }),
+      );
+    });
+
+    it('should include timestamp in response', () => {
+      const mockStats = {
+        totalSent: 5,
+        totalFailed: 1,
+        countByProduct: [],
+      };
+
+      mockNotificationService.getNotificationStats.mockReturnValue(mockStats);
+
+      notificationStatsHandler({}, mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(
+        mockSocket,
+        'getNotificationStats-result',
+        expect.objectContaining({
+          success: true,
+          timestamp: expect.any(Number),
         }),
       );
     });

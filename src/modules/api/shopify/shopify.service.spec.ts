@@ -126,9 +126,7 @@ describe('ShopifyService', () => {
         config: {} as any,
       };
 
-      jest
-        .spyOn(authService, 'loadCookies')
-        .mockResolvedValue(mockCookieHeader);
+      jest.spyOn(authService, 'loadCookies').mockReturnValue(mockCookieHeader);
       jest.spyOn(httpService, 'get').mockReturnValue(of(mockResponse));
 
       const result = await service.getProducts();
@@ -160,16 +158,14 @@ describe('ShopifyService', () => {
         isAxiosError: true,
       };
 
-      jest
-        .spyOn(authService, 'loadCookies')
-        .mockResolvedValue(mockCookieHeader);
+      jest.spyOn(authService, 'loadCookies').mockReturnValue(mockCookieHeader);
       jest
         .spyOn(httpService, 'get')
         .mockReturnValue(throwError(() => mockError));
 
       await expect(service.getProducts()).rejects.toThrow(ShopifyAuthException);
       await expect(service.getProducts()).rejects.toThrow(
-        'Authentication failed. Please re-run: lumentui auth',
+        'Authentication failed. Please re-run: lumentui login',
       );
       expect(loggerService.error).toHaveBeenCalled();
     });
@@ -184,9 +180,7 @@ describe('ShopifyService', () => {
         isAxiosError: true,
       };
 
-      jest
-        .spyOn(authService, 'loadCookies')
-        .mockResolvedValue(mockCookieHeader);
+      jest.spyOn(authService, 'loadCookies').mockReturnValue(mockCookieHeader);
       jest
         .spyOn(httpService, 'get')
         .mockReturnValue(throwError(() => mockError));
@@ -204,9 +198,7 @@ describe('ShopifyService', () => {
         isAxiosError: true,
       };
 
-      jest
-        .spyOn(authService, 'loadCookies')
-        .mockResolvedValue(mockCookieHeader);
+      jest.spyOn(authService, 'loadCookies').mockReturnValue(mockCookieHeader);
       jest
         .spyOn(httpService, 'get')
         .mockReturnValue(throwError(() => mockError));
@@ -229,9 +221,7 @@ describe('ShopifyService', () => {
         isAxiosError: true,
       };
 
-      jest
-        .spyOn(authService, 'loadCookies')
-        .mockResolvedValue(mockCookieHeader);
+      jest.spyOn(authService, 'loadCookies').mockReturnValue(mockCookieHeader);
       jest
         .spyOn(httpService, 'get')
         .mockReturnValue(throwError(() => mockError));
@@ -250,9 +240,7 @@ describe('ShopifyService', () => {
         isAxiosError: true,
       } as any;
 
-      jest
-        .spyOn(authService, 'loadCookies')
-        .mockResolvedValue(mockCookieHeader);
+      jest.spyOn(authService, 'loadCookies').mockReturnValue(mockCookieHeader);
       jest
         .spyOn(httpService, 'get')
         .mockReturnValue(throwError(() => mockError));
@@ -271,9 +259,7 @@ describe('ShopifyService', () => {
         isAxiosError: true,
       } as any;
 
-      jest
-        .spyOn(authService, 'loadCookies')
-        .mockResolvedValue(mockCookieHeader);
+      jest.spyOn(authService, 'loadCookies').mockReturnValue(mockCookieHeader);
       jest
         .spyOn(httpService, 'get')
         .mockReturnValue(throwError(() => mockError));
@@ -294,9 +280,7 @@ describe('ShopifyService', () => {
         config: {} as any,
       };
 
-      jest
-        .spyOn(authService, 'loadCookies')
-        .mockResolvedValue(mockCookieHeader);
+      jest.spyOn(authService, 'loadCookies').mockReturnValue(mockCookieHeader);
       jest.spyOn(httpService, 'get').mockReturnValue(of(mockResponse));
 
       const result = await service.getProducts();
