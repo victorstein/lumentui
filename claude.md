@@ -37,6 +37,71 @@ Use `pnpm` exclusively. The project uses pnpm, not npm or yarn.
 - Run `pnpm run build` after changes to verify compilation
 - Run `pnpm test` to verify all tests pass
 
+### Module Resolution (ESM vs CommonJS)
+
+**Problem**: LumenTUI uses ESM (ECMAScript Modules) for production code but Jest runs tests in CommonJS mode. This creates compatibility issues with module-specific globals.
+
+**ESM vs CommonJS Differences**:
+
+| Feature        | CommonJS (CJS)     | ESM                        |
+| -------------- | ------------------ | -------------------------- |
+| File extension | `.js` (default)    | `.js` or `.mjs`            |
+| Import syntax  | `require()`        | `import`                   |
+| Export syntax  | `module.exports`   | `export`                   |
+| Directory path | `__dirname`        | `import.meta.url`          |
+| File path      | `__filename`       | `import.meta.url`          |
+| Compilation    | NestJS uses CJS    | Ink/React uses ESM         |
+| Jest test mode | CommonJS (default) | N/A (Jest can't parse ESM) |
+
+**Solution Pattern**: See `src/common/utils/paths.util.ts:19-31` for the canonical implementation:
+
+```typescript
+import { fileURLToPath } from 'url';
+import * as path from 'path';
+
+private static getDirname(): string {
+  // Check if we're in CommonJS or ESM
+  if (typeof __dirname !== 'undefined') {
+    // CommonJS (Jest tests, older Node)
+    return __dirname;
+  } else {
+    // ESM (production runtime)
+    // Use Function() to hide import.meta from parsers (like Jest)
+    // that don't support ESM syntax
+    const getMetaUrl = new Function('return import.meta.url');
+    return path.dirname(fileURLToPath(getMetaUrl()));
+  }
+}
+```
+
+**Why Function() Wrapper?**
+
+- Jest parses all code at compile time, even code in conditional branches
+- `import.meta` syntax causes `SyntaxError: Cannot use 'import.meta' outside a module`
+- `new Function()` creates a function from a string at runtime, hiding syntax from parser
+- At runtime, the function executes and returns the correct value in ESM environments
+
+**When to Use This Pattern**:
+
+1. **Need `__dirname` or `__filename`** in code that runs in both test and production
+2. **PathsUtil already provides this** - use `PathsUtil.getDirname()` or other PathsUtil methods
+3. **Creating new utilities** that need file/directory paths in dual environments
+
+**DO NOT**:
+
+- Use `process.cwd()` as a substitute (it's the working directory, not the file location)
+- Access `import.meta` directly in shared code (breaks Jest)
+- Use `__dirname` directly in ESM-only code (it's undefined)
+
+**TypeScript Configuration**:
+
+| File                | module   | moduleResolution | Target   | Notes                      |
+| ------------------- | -------- | ---------------- | -------- | -------------------------- |
+| `tsconfig.json`     | `node16` | `node16`         | `ES2022` | Base config (not used)     |
+| `tsconfig.cli.json` | `node16` | `node16`         | `ES2022` | Daemon + CLI (uses NestJS) |
+| `tsconfig.ui.json`  | `node16` | `node16`         | `ES2022` | TUI (Ink/React, pure ESM)  |
+| `jest.config.js`    | N/A      | N/A              | N/A      | Tests run in CommonJS mode |
+
 ### Environment Configuration
 
 - Development: Use `.env` file in project root

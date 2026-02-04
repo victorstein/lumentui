@@ -23,8 +23,14 @@ export class PathsUtil {
       return __dirname;
     } else {
       // ESM - use import.meta.url
-      // @ts-ignore - import.meta.url exists in ESM
-      return path.dirname(fileURLToPath(import.meta.url));
+      // Use Function() to hide import.meta from parsers (like Jest)
+      // that don't support ESM syntax
+      // Justification: Function() constructor is required to hide import.meta from Jest parser
+      // which runs in CommonJS mode and throws SyntaxError on import.meta even in dead code paths
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const getMetaUrl = new Function('return import.meta.url');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument
+      return path.dirname(fileURLToPath(getMetaUrl()));
     }
   }
 
