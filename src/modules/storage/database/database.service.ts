@@ -137,6 +137,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         product_id TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
         sent INTEGER NOT NULL,
+        product_title TEXT,
+        availability_change TEXT,
+        error_message TEXT,
         FOREIGN KEY (product_id) REFERENCES products (id)
       )
     `);
@@ -336,14 +339,32 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   /**
    * Record notification in database
    */
-  recordNotification(productId: string, sent: boolean): void {
+  recordNotification(
+    productId: string,
+    sent: boolean,
+    options?: {
+      productTitle?: string;
+      availabilityChange?: string;
+      errorMessage?: string;
+    },
+  ): void {
     try {
       this.execute(
         `
-        INSERT INTO notifications (product_id, timestamp, sent)
-        VALUES (?, ?, ?)
+        INSERT INTO notifications (
+          product_id, timestamp, sent, product_title,
+          availability_change, error_message
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
       `,
-        [productId, Date.now(), sent ? 1 : 0],
+        [
+          productId,
+          Date.now(),
+          sent ? 1 : 0,
+          options?.productTitle || null,
+          options?.availabilityChange || null,
+          options?.errorMessage || null,
+        ],
       );
 
       // Persist after recording notification
