@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SchedulerRegistry } from '@nestjs/schedule';
+import { SchedulerRegistry, Cron } from '@nestjs/schedule';
 import { LoggerService } from '../../common/logger/logger.service';
 import { ShopifyService } from '../api/shopify/shopify.service';
 import { DatabaseService } from '../storage/database/database.service';
@@ -332,5 +332,45 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
           }
         : undefined,
     };
+  }
+
+  /**
+   * Scheduled cleanup task - runs daily at midnight
+   * Prunes old notification history to prevent database bloat
+   */
+  @Cron('0 0 * * *')
+  handleNotificationCleanup(): void {
+    try {
+      this.logger.log(
+        'Starting scheduled notification history cleanup',
+        'SchedulerService',
+      );
+
+      const deletedCount = this.databaseService.pruneNotificationHistory();
+
+      this.logger.log(
+        `Notification history cleanup complete: ${deletedCount} records deleted`,
+        'SchedulerService',
+      );
+
+      this.ipcGateway.emitLog(
+        'info',
+        `Cleaned up ${deletedCount} old notification records`,
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+
+      this.logger.error(
+        `Notification history cleanup failed: ${errorMessage}`,
+        error instanceof Error ? error.stack : undefined,
+        'SchedulerService',
+      );
+
+      this.ipcGateway.emitLog(
+        'error',
+        `Notification cleanup failed: ${errorMessage}`,
+      );
+    }
   }
 }

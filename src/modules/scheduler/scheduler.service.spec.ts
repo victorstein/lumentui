@@ -112,6 +112,7 @@ describe('SchedulerService', () => {
       saveProducts: jest.fn(),
       recordPoll: jest.fn(),
       getPolls: jest.fn(),
+      pruneNotificationHistory: jest.fn(),
     };
 
     const mockConfigService = {
@@ -635,6 +636,86 @@ describe('SchedulerService', () => {
       const status = service.getStatus();
 
       expect(status.isPolling).toBe(true);
+    });
+  });
+
+  describe('handleNotificationCleanup', () => {
+    it('should successfully clean up notification history', () => {
+      databaseService.pruneNotificationHistory.mockReturnValue(25);
+
+      service.handleNotificationCleanup();
+
+      expect(databaseService.pruneNotificationHistory).toHaveBeenCalled();
+      expect(loggerService.log).toHaveBeenCalledWith(
+        'Starting scheduled notification history cleanup',
+        'SchedulerService',
+      );
+      expect(loggerService.log).toHaveBeenCalledWith(
+        'Notification history cleanup complete: 25 records deleted',
+        'SchedulerService',
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        'Cleaned up 25 old notification records',
+      );
+    });
+
+    it('should handle cleanup when no records deleted', () => {
+      databaseService.pruneNotificationHistory.mockReturnValue(0);
+
+      service.handleNotificationCleanup();
+
+      expect(databaseService.pruneNotificationHistory).toHaveBeenCalled();
+      expect(loggerService.log).toHaveBeenCalledWith(
+        'Notification history cleanup complete: 0 records deleted',
+        'SchedulerService',
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        'Cleaned up 0 old notification records',
+      );
+    });
+
+    it('should handle cleanup errors gracefully', () => {
+      const error = new Error('Database error during cleanup');
+      databaseService.pruneNotificationHistory.mockImplementation(() => {
+        throw error;
+      });
+
+      expect(() => service.handleNotificationCleanup()).not.toThrow();
+
+      expect(loggerService.error).toHaveBeenCalledWith(
+        'Notification history cleanup failed: Database error during cleanup',
+        expect.any(String),
+        'SchedulerService',
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'error',
+        'Notification cleanup failed: Database error during cleanup',
+      );
+    });
+
+    it('should handle non-Error exceptions', () => {
+      databaseService.pruneNotificationHistory.mockImplementation(() => {
+        throw 'String error';
+      });
+
+      expect(() => service.handleNotificationCleanup()).not.toThrow();
+
+      expect(loggerService.error).toHaveBeenCalledWith(
+        'Notification history cleanup failed: Unknown error',
+        undefined,
+        'SchedulerService',
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'error',
+        'Notification cleanup failed: Unknown error',
+      );
+    });
+
+    it('should have cleanup method defined', () => {
+      expect(service.handleNotificationCleanup).toBeDefined();
+      expect(typeof service.handleNotificationCleanup).toBe('function');
     });
   });
 });
