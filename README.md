@@ -619,24 +619,11 @@ GitHub: [@victorstein](https://github.com/victorstein)
 
 ### Phase 3 (Current)
 
+- [ ] Notification history view
 - [ ] Product detail modal in TUI
 - [ ] Interactive product filtering/search
 - [ ] TUI settings panel
-- [ ] Notification history view
 - [ ] Export product data (JSON/CSV)
-
-### Phase 4 (Future)
-
-- [ ] REST API endpoints
-- [ ] Swagger documentation
-- [ ] Web dashboard (React)
-- [ ] Docker support
-- [ ] Multi-store support
-- [ ] Email notifications
-- [ ] Webhook support
-- [ ] Slack/Discord integrations
-- [ ] Product price tracking
-- [ ] Historical availability charts
 
 ---
 
