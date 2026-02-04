@@ -29,6 +29,8 @@
     "build:cli": "tsc -p tsconfig.cli.json && chmod +x dist/cli.js",
     "build:ui": "rm -f tsconfig.ui.tsbuildinfo && tsc -p tsconfig.ui.json && echo '{\"type\":\"module\"}' > dist/ui/package.json",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
+    "type-check": "tsc --noEmit",
     "start": "node dist/cli.js",
     "start:daemon": "node dist/main.js",
     "dev": "nest start --watch",
