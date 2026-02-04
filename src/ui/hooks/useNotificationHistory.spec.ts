@@ -2,68 +2,76 @@
  * @jest-environment jsdom
  */
 
-const mockIpcClient = {
-  on: jest.fn(),
-  emit: jest.fn(),
-};
-
-const mockIpc = {
-  config: {
-    id: '',
-    retry: 0,
-    silent: true,
-  },
-  connectTo: jest.fn(),
-  disconnect: jest.fn(),
-  of: {
-    'lumentui-daemon': mockIpcClient,
-  },
-};
-
-jest.mock('node-ipc', () => mockIpc);
-
-/* eslint-disable */
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import {
   useNotificationHistory,
   FormattedNotification,
 } from './useNotificationHistory';
-import * as ipc from 'node-ipc';
+import * as DaemonContextModule from '../context/DaemonContext.js';
+
+jest.mock('../context/DaemonContext.js');
 
 describe('useNotificationHistory', () => {
-  let mockEventHandlers: Record<string, Function>;
+  const mockFetchNotificationHistory = jest.fn();
+
+  const defaultDaemonState = {
+    connected: false,
+    lastHeartbeat: null,
+    products: [],
+    logs: [],
+    error: null,
+    newProductNotification: null,
+    polling: false,
+    notificationHistory: [],
+    loadingHistory: false,
+    historyError: null,
+    forcePoll: jest.fn(),
+    clearError: jest.fn(),
+    clearNotification: jest.fn(),
+    fetchNotificationHistory: mockFetchNotificationHistory,
+  };
 
   beforeEach(() => {
-    jest.useFakeTimers();
-
-    mockEventHandlers = {};
-
-    mockIpcClient.on = jest.fn((event: string, handler: Function) => {
-      mockEventHandlers[event] = handler;
-    });
-    mockIpcClient.emit = jest.fn();
-
-    mockIpc.connectTo = jest.fn(
-      (id: string, path: string, callback: Function) => {
-        callback();
-      },
-    );
-  });
-
-  afterEach(() => {
     jest.clearAllMocks();
-    jest.useRealTimers();
+
+    (DaemonContextModule.useDaemonContext as jest.Mock).mockReturnValue({
+      ...defaultDaemonState,
+      connected: true,
+    });
   });
 
-  it('should initialize with default state', () => {
+  it('should initialize with default state when not connected', () => {
+    (DaemonContextModule.useDaemonContext as jest.Mock).mockReturnValue({
+      ...defaultDaemonState,
+      connected: false,
+    });
+
     const { result } = renderHook(() => useNotificationHistory());
 
     expect(result.current.history).toEqual([]);
-    expect(result.current.loading).toBe(true);
+    expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
   });
 
-  it('should fetch notification history on mount', async () => {
+  it('should fetch notification history on mount when connected', () => {
+    renderHook(() => useNotificationHistory());
+
+    expect(mockFetchNotificationHistory).toHaveBeenCalledWith(undefined);
+  });
+
+  it('should apply filters when provided', () => {
+    const filters = {
+      productId: '123',
+      status: 'sent' as const,
+      limit: 10,
+    };
+
+    renderHook(() => useNotificationHistory(filters));
+
+    expect(mockFetchNotificationHistory).toHaveBeenCalledWith(filters);
+  });
+
+  it('should return notification history from daemon context', () => {
     const mockHistory: FormattedNotification[] = [
       {
         id: 1,
@@ -87,139 +95,57 @@ describe('useNotificationHistory', () => {
       },
     ];
 
+    (DaemonContextModule.useDaemonContext as jest.Mock).mockReturnValue({
+      ...defaultDaemonState,
+      connected: true,
+      notificationHistory: mockHistory,
+    });
+
     const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      mockEventHandlers['connect']();
-    });
-
-    expect(mockIpcClient.emit).toHaveBeenCalledWith(
-      'getNotificationHistory',
-      {},
-    );
-
-    act(() => {
-      mockEventHandlers['getNotificationHistory-result']({
-        success: true,
-        history: mockHistory,
-        count: 2,
-        timestamp: Date.now(),
-      });
-    });
 
     expect(result.current.history).toEqual(mockHistory);
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
   });
 
-  it('should apply filters when provided', async () => {
-    const filters = {
-      productId: '123',
-      status: 'sent' as const,
-      limit: 10,
-    };
-
-    const { result } = renderHook(() => useNotificationHistory(filters));
-
-    act(() => {
-      mockEventHandlers['connect']();
+  it('should return empty history when no notifications exist', () => {
+    (DaemonContextModule.useDaemonContext as jest.Mock).mockReturnValue({
+      ...defaultDaemonState,
+      connected: true,
+      notificationHistory: [],
     });
 
-    expect(mockIpcClient.emit).toHaveBeenCalledWith(
-      'getNotificationHistory',
-      filters,
-    );
-  });
-
-  it('should handle successful result with empty history', () => {
     const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      mockEventHandlers['connect']();
-    });
-
-    act(() => {
-      mockEventHandlers['getNotificationHistory-result']({
-        success: true,
-        history: [],
-        count: 0,
-        timestamp: Date.now(),
-      });
-    });
 
     expect(result.current.history).toEqual([]);
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
   });
 
-  it('should handle error result from daemon', () => {
+  it('should handle error from daemon', () => {
+    (DaemonContextModule.useDaemonContext as jest.Mock).mockReturnValue({
+      ...defaultDaemonState,
+      connected: true,
+      historyError: 'Database error',
+    });
+
     const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      mockEventHandlers['connect']();
-    });
-
-    act(() => {
-      mockEventHandlers['getNotificationHistory-result']({
-        success: false,
-        history: [],
-        error: 'Database error',
-        timestamp: Date.now(),
-      });
-    });
 
     expect(result.current.history).toEqual([]);
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBe('Database error');
   });
 
-  it('should handle connection error (ECONNREFUSED)', () => {
-    const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      mockEventHandlers['error'](new Error('ECONNREFUSED'));
+  it('should indicate loading state', () => {
+    (DaemonContextModule.useDaemonContext as jest.Mock).mockReturnValue({
+      ...defaultDaemonState,
+      connected: true,
+      loadingHistory: true,
     });
 
-    expect(result.current.history).toEqual([]);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('Cannot connect to daemon');
-  });
-
-  it('should handle connection error (ENOENT)', () => {
     const { result } = renderHook(() => useNotificationHistory());
 
-    act(() => {
-      mockEventHandlers['error'](new Error('ENOENT socket not found'));
-    });
-
-    expect(result.current.history).toEqual([]);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('Cannot connect to daemon');
-  });
-
-  it('should handle generic error', () => {
-    const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      mockEventHandlers['error'](new Error('Something went wrong'));
-    });
-
-    expect(result.current.history).toEqual([]);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('Something went wrong');
-  });
-
-  it('should handle connection timeout', () => {
-    const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      jest.advanceTimersByTime(5000);
-    });
-
-    expect(result.current.history).toEqual([]);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('Connection timeout');
-    expect(mockIpc.disconnect).toHaveBeenCalled();
+    expect(result.current.loading).toBe(true);
   });
 
   it('should provide refetch function', () => {
@@ -228,100 +154,19 @@ describe('useNotificationHistory', () => {
     expect(typeof result.current.refetch).toBe('function');
   });
 
-  it('should refetch data when refetch is called', () => {
-    const mockHistory: FormattedNotification[] = [
-      {
-        id: 1,
-        productId: '123',
-        productTitle: 'Test Product',
-        timestamp: Date.now(),
-        formattedTimestamp: '2026-02-03 10:00:00',
-        status: 'sent',
-        availabilityChange: 'true -> false',
-        errorMessage: null,
-      },
-    ];
-
+  it('should call fetchNotificationHistory when refetch is called', () => {
     const { result } = renderHook(() => useNotificationHistory());
 
-    act(() => {
-      mockEventHandlers['connect']();
-    });
-
-    act(() => {
-      mockEventHandlers['getNotificationHistory-result']({
-        success: true,
-        history: mockHistory,
-        count: 1,
-        timestamp: Date.now(),
-      });
-    });
-
-    expect(result.current.history).toEqual(mockHistory);
-    expect(result.current.loading).toBe(false);
-
-    const originalEmitCallCount = mockIpcClient.emit.mock.calls.length;
+    mockFetchNotificationHistory.mockClear();
 
     act(() => {
       result.current.refetch();
     });
 
-    expect(result.current.loading).toBe(true);
-
-    act(() => {
-      mockEventHandlers['connect']();
-    });
-
-    expect(mockIpcClient.emit).toHaveBeenCalledTimes(originalEmitCallCount + 1);
+    expect(mockFetchNotificationHistory).toHaveBeenCalledWith(undefined);
   });
 
-  it('should reset error state when refetching', () => {
-    const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      mockEventHandlers['error'](new Error('Initial error'));
-    });
-
-    expect(result.current.error).toBe('Initial error');
-
-    act(() => {
-      result.current.refetch();
-    });
-
-    expect(result.current.loading).toBe(true);
-    expect(result.current.error).toBeNull();
-  });
-
-  it('should disconnect client on successful result', () => {
-    const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      mockEventHandlers['connect']();
-    });
-
-    act(() => {
-      mockEventHandlers['getNotificationHistory-result']({
-        success: true,
-        history: [],
-        count: 0,
-        timestamp: Date.now(),
-      });
-    });
-
-    expect(mockIpc.disconnect).toHaveBeenCalled();
-  });
-
-  it('should disconnect client on error', () => {
-    const { result } = renderHook(() => useNotificationHistory());
-
-    act(() => {
-      mockEventHandlers['error'](new Error('Test error'));
-    });
-
-    expect(mockIpc.disconnect).toHaveBeenCalled();
-  });
-
-  it('should handle filters with date range', () => {
+  it('should call fetchNotificationHistory with filters on refetch', () => {
     const filters = {
       dateFrom: '2026-02-01',
       dateTo: '2026-02-03',
@@ -329,14 +174,24 @@ describe('useNotificationHistory', () => {
 
     const { result } = renderHook(() => useNotificationHistory(filters));
 
+    mockFetchNotificationHistory.mockClear();
+
     act(() => {
-      mockEventHandlers['connect']();
+      result.current.refetch();
     });
 
-    expect(mockIpcClient.emit).toHaveBeenCalledWith(
-      'getNotificationHistory',
-      filters,
-    );
+    expect(mockFetchNotificationHistory).toHaveBeenCalledWith(filters);
+  });
+
+  it('should not fetch when not connected', () => {
+    (DaemonContextModule.useDaemonContext as jest.Mock).mockReturnValue({
+      ...defaultDaemonState,
+      connected: false,
+    });
+
+    renderHook(() => useNotificationHistory());
+
+    expect(mockFetchNotificationHistory).not.toHaveBeenCalled();
   });
 
   it('should handle filters with status filter', () => {
@@ -344,16 +199,9 @@ describe('useNotificationHistory', () => {
       status: 'failed' as const,
     };
 
-    const { result } = renderHook(() => useNotificationHistory(filters));
+    renderHook(() => useNotificationHistory(filters));
 
-    act(() => {
-      mockEventHandlers['connect']();
-    });
-
-    expect(mockIpcClient.emit).toHaveBeenCalledWith(
-      'getNotificationHistory',
-      filters,
-    );
+    expect(mockFetchNotificationHistory).toHaveBeenCalledWith(filters);
   });
 
   it('should handle filters with pagination', () => {
@@ -362,15 +210,8 @@ describe('useNotificationHistory', () => {
       offset: 10,
     };
 
-    const { result } = renderHook(() => useNotificationHistory(filters));
+    renderHook(() => useNotificationHistory(filters));
 
-    act(() => {
-      mockEventHandlers['connect']();
-    });
-
-    expect(mockIpcClient.emit).toHaveBeenCalledWith(
-      'getNotificationHistory',
-      filters,
-    );
+    expect(mockFetchNotificationHistory).toHaveBeenCalledWith(filters);
   });
 });

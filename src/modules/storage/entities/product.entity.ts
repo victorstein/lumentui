@@ -31,6 +31,9 @@ export interface NotificationEntity {
   product_title?: string | null;
   availability_change?: string | null;
   error_message?: string | null;
+  change_type?: 'new' | 'price_change' | 'availability_change' | null;
+  old_value?: string | null; // JSON-encoded old value
+  new_value?: string | null; // JSON-encoded new value
 }
 
 export interface NotificationHistoryFilters {
@@ -38,6 +41,7 @@ export interface NotificationHistoryFilters {
   dateTo?: string;
   productId?: string;
   status?: 'sent' | 'failed';
+  changeType?: 'new' | 'price_change' | 'availability_change';
   limit?: number;
   offset?: number;
 }

@@ -63,6 +63,7 @@ export class NotificationService implements OnModuleInit {
       this.recordNotification(product.id, true, {
         productTitle: product.title,
         availabilityChange: this.describeAvailabilityChange(product),
+        changeType: 'new',
       });
 
       this.logger.log(
@@ -84,6 +85,7 @@ export class NotificationService implements OnModuleInit {
         productTitle: product.title,
         availabilityChange: this.describeAvailabilityChange(product),
         errorMessage,
+        changeType: 'new',
       });
 
       return false;
@@ -132,6 +134,9 @@ export class NotificationService implements OnModuleInit {
       this.recordNotification(product.id, true, {
         productTitle: product.title,
         availabilityChange: `price ${priceDescription}`,
+        changeType: 'price_change',
+        oldValue: { price: oldPrice, compareAtPrice: oldCompareAtPrice },
+        newValue: { price: newPrice, compareAtPrice: newCompareAtPrice },
       });
 
       this.logger.log(
@@ -153,6 +158,9 @@ export class NotificationService implements OnModuleInit {
         productTitle: product.title,
         availabilityChange: `price ${priceDescription}`,
         errorMessage,
+        changeType: 'price_change',
+        oldValue: { price: oldPrice, compareAtPrice: oldCompareAtPrice },
+        newValue: { price: newPrice, compareAtPrice: newCompareAtPrice },
       });
 
       return false;
@@ -194,6 +202,9 @@ export class NotificationService implements OnModuleInit {
       this.recordNotification(product.id, true, {
         productTitle: product.title,
         availabilityChange: changeDescription,
+        changeType: 'availability_change',
+        oldValue: { available: wasAvailable },
+        newValue: { available: isAvailable },
       });
 
       this.logger.log(
@@ -218,6 +229,9 @@ export class NotificationService implements OnModuleInit {
         productTitle: product.title,
         availabilityChange: changeDescription,
         errorMessage,
+        changeType: 'availability_change',
+        oldValue: { available: wasAvailable },
+        newValue: { available: isAvailable },
       });
 
       return false;
@@ -369,13 +383,16 @@ export class NotificationService implements OnModuleInit {
   private recordNotification(
     productId: string,
     sent: boolean,
-    options?: {
+    metadata?: {
       productTitle?: string;
       availabilityChange?: string;
       errorMessage?: string;
+      changeType?: 'new' | 'price_change' | 'availability_change';
+      oldValue?: Record<string, unknown>;
+      newValue?: Record<string, unknown>;
     },
   ): void {
-    this.databaseService.recordNotification(productId, sent, options);
+    this.databaseService.recordNotification(productId, sent, metadata);
   }
 
   /**

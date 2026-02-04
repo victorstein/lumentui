@@ -160,9 +160,43 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         product_title TEXT,
         availability_change TEXT,
         error_message TEXT,
+        change_type TEXT,
+        old_value TEXT,
+        new_value TEXT,
         FOREIGN KEY (product_id) REFERENCES products (id)
       )
     `);
+
+    // Add change_type, old_value, new_value columns to notifications if they don't exist
+    const notificationColumnsResult = this.db.exec(
+      `PRAGMA table_info(notifications)`,
+    );
+    if (notificationColumnsResult.length > 0) {
+      const notificationColumns = notificationColumnsResult[0].values.map(
+        (row) => row[1],
+      );
+      if (!notificationColumns.includes('change_type')) {
+        this.db.run(`ALTER TABLE notifications ADD COLUMN change_type TEXT`);
+        this.logger.log(
+          'Added change_type column to notifications table',
+          'DatabaseService',
+        );
+      }
+      if (!notificationColumns.includes('old_value')) {
+        this.db.run(`ALTER TABLE notifications ADD COLUMN old_value TEXT`);
+        this.logger.log(
+          'Added old_value column to notifications table',
+          'DatabaseService',
+        );
+      }
+      if (!notificationColumns.includes('new_value')) {
+        this.db.run(`ALTER TABLE notifications ADD COLUMN new_value TEXT`);
+        this.logger.log(
+          'Added new_value column to notifications table',
+          'DatabaseService',
+        );
+      }
+    }
 
     // Create notification_history_metadata table
     this.db.run(`
@@ -186,6 +220,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     );
     this.db.run(
       `CREATE INDEX IF NOT EXISTS idx_notifications_product ON notifications(product_id)`,
+    );
+    this.db.run(
+      `CREATE INDEX IF NOT EXISTS idx_notifications_change_type ON notifications(change_type)`,
     );
 
     // Persist after migrations
@@ -374,10 +411,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   recordNotification(
     productId: string,
     sent: boolean,
-    options?: {
+    metadata?: {
       productTitle?: string;
       availabilityChange?: string;
       errorMessage?: string;
+      changeType?: 'new' | 'price_change' | 'availability_change';
+      oldValue?: Record<string, unknown>;
+      newValue?: Record<string, unknown>;
     },
   ): void {
     try {
@@ -385,17 +425,20 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         `
         INSERT INTO notifications (
           product_id, timestamp, sent, product_title,
-          availability_change, error_message
+          availability_change, error_message, change_type, old_value, new_value
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
         [
           productId,
           Date.now(),
           sent ? 1 : 0,
-          options?.productTitle || null,
-          options?.availabilityChange || null,
-          options?.errorMessage || null,
+          metadata?.productTitle || null,
+          metadata?.availabilityChange || null,
+          metadata?.errorMessage || null,
+          metadata?.changeType || null,
+          metadata?.oldValue ? JSON.stringify(metadata.oldValue) : null,
+          metadata?.newValue ? JSON.stringify(metadata.newValue) : null,
         ],
       );
 
@@ -448,6 +491,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         const sentValue = filters.status === 'sent' ? 1 : 0;
         whereClauses.push('sent = ?');
         params.push(sentValue);
+      }
+
+      if (filters?.changeType) {
+        whereClauses.push('change_type = ?');
+        params.push(filters.changeType);
       }
 
       if (whereClauses.length > 0) {

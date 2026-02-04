@@ -824,6 +824,183 @@ describe('DatabaseService', () => {
     });
   });
 
+  describe('notification change type tracking', () => {
+    beforeEach(() => {
+      service.saveProducts(mockProducts);
+      service['db'].run('DELETE FROM notifications');
+    });
+
+    it('should record notification with change_type metadata', () => {
+      service.recordNotification('123', true, {
+        productTitle: 'Test Product',
+        changeType: 'new',
+      });
+
+      const history = service.getNotificationHistory({ productId: '123' });
+      expect(history).toHaveLength(1);
+      expect(history[0].change_type).toBe('new');
+    });
+
+    it('should record price change metadata', () => {
+      service.recordNotification('123', true, {
+        productTitle: 'Test Product',
+        changeType: 'price_change',
+        oldValue: { price: 50.0 },
+        newValue: { price: 40.0 },
+      });
+
+      const history = service.getNotificationHistory({ productId: '123' });
+      expect(history).toHaveLength(1);
+      expect(history[0].change_type).toBe('price_change');
+      expect(history[0].old_value).toBe('{"price":50}');
+      expect(history[0].new_value).toBe('{"price":40}');
+    });
+
+    it('should record availability change metadata', () => {
+      service.recordNotification('123', true, {
+        productTitle: 'Test Product',
+        changeType: 'availability_change',
+        oldValue: { available: false },
+        newValue: { available: true },
+      });
+
+      const history = service.getNotificationHistory({ productId: '123' });
+      expect(history).toHaveLength(1);
+      expect(history[0].change_type).toBe('availability_change');
+      expect(history[0].old_value).toBe('{"available":false}');
+      expect(history[0].new_value).toBe('{"available":true}');
+    });
+
+    it('should filter by change_type', () => {
+      service.recordNotification('123', true, {
+        changeType: 'new',
+      });
+      service.recordNotification('124', true, {
+        changeType: 'price_change',
+        oldValue: { price: 100 },
+        newValue: { price: 80 },
+      });
+      service.recordNotification('123', true, {
+        changeType: 'availability_change',
+        oldValue: { available: false },
+        newValue: { available: true },
+      });
+
+      const newNotifications = service.getNotificationHistory({
+        changeType: 'new',
+      });
+      expect(newNotifications).toHaveLength(1);
+      expect(newNotifications[0].change_type).toBe('new');
+
+      const priceChanges = service.getNotificationHistory({
+        changeType: 'price_change',
+      });
+      expect(priceChanges).toHaveLength(1);
+      expect(priceChanges[0].change_type).toBe('price_change');
+
+      const availabilityChanges = service.getNotificationHistory({
+        changeType: 'availability_change',
+      });
+      expect(availabilityChanges).toHaveLength(1);
+      expect(availabilityChanges[0].change_type).toBe('availability_change');
+    });
+
+    it('should handle complex old_value and new_value objects', () => {
+      service.recordNotification('123', true, {
+        productTitle: 'Test Product',
+        changeType: 'price_change',
+        oldValue: {
+          price: 100.0,
+          compareAtPrice: 150.0,
+          currency: 'USD',
+        },
+        newValue: {
+          price: 80.0,
+          compareAtPrice: 120.0,
+          currency: 'USD',
+        },
+      });
+
+      const history = service.getNotificationHistory({ productId: '123' });
+      expect(history).toHaveLength(1);
+
+      const oldValue = JSON.parse(history[0].old_value!);
+      const newValue = JSON.parse(history[0].new_value!);
+
+      expect(oldValue.price).toBe(100);
+      expect(oldValue.compareAtPrice).toBe(150);
+      expect(newValue.price).toBe(80);
+      expect(newValue.compareAtPrice).toBe(120);
+    });
+
+    it('should handle null change metadata gracefully', () => {
+      service.recordNotification('123', true);
+
+      const history = service.getNotificationHistory({ productId: '123' });
+      expect(history).toHaveLength(1);
+      expect(history[0].change_type).toBeNull();
+      expect(history[0].old_value).toBeNull();
+      expect(history[0].new_value).toBeNull();
+    });
+
+    it('should combine changeType filter with other filters', () => {
+      service.recordNotification('123', true, {
+        productTitle: 'Test Product 1',
+        changeType: 'price_change',
+        oldValue: { price: 100 },
+        newValue: { price: 80 },
+      });
+      service.recordNotification('123', false, {
+        productTitle: 'Test Product 1',
+        changeType: 'price_change',
+        oldValue: { price: 100 },
+        newValue: { price: 80 },
+        errorMessage: 'Failed',
+      });
+      service.recordNotification('124', true, {
+        productTitle: 'Test Product 2',
+        changeType: 'price_change',
+        oldValue: { price: 50 },
+        newValue: { price: 40 },
+      });
+
+      const history = service.getNotificationHistory({
+        productId: '123',
+        status: 'sent',
+        changeType: 'price_change',
+      });
+
+      expect(history).toHaveLength(1);
+      expect(history[0].product_id).toBe('123');
+      expect(history[0].sent).toBe(1);
+      expect(history[0].change_type).toBe('price_change');
+    });
+  });
+
+  describe('schema migration for change tracking', () => {
+    it('should have change_type column in notifications table', () => {
+      const db = service.getDatabase();
+      const columnsResult = db.exec(`PRAGMA table_info(notifications)`);
+
+      expect(columnsResult.length).toBeGreaterThan(0);
+
+      const columns = columnsResult[0].values.map((row) => row[1]);
+      expect(columns).toContain('change_type');
+      expect(columns).toContain('old_value');
+      expect(columns).toContain('new_value');
+    });
+
+    it('should have index on change_type column', () => {
+      const db = service.getDatabase();
+      const indexesResult = db.exec(`PRAGMA index_list(notifications)`);
+
+      expect(indexesResult.length).toBeGreaterThan(0);
+
+      const indexes = indexesResult[0].values.map((row) => row[1]);
+      expect(indexes).toContain('idx_notifications_change_type');
+    });
+  });
+
   describe('error handling', () => {
     it('should handle getNotificationHistory errors gracefully', () => {
       const db = service.getDatabase();
