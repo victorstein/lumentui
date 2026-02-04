@@ -46,7 +46,30 @@
       "mcp__plugin_github_github__create_or_update_file",
       "Bash(pnpm build:*)",
       "Bash(npm publish:*)",
-      "Bash(shasum:*)"
+      "Bash(shasum:*)",
+      "mcp__plugin_github_github__pull_request_read",
+      "Bash(git apply:*)",
+      "Bash(git push:*)",
+      "Bash(pnpm run build:cli:*)",
+      "Bash(pnpm run build:daemon:*)",
+      "Bash(pnpm run build:ui:*)",
+      "Bash(bd create:*)",
+      "Bash(bd update:*)",
+      "Bash(bd close:*)",
+      "Bash(gtimeout 3 node:*)",
+      "Bash(pnpm list:*)",
+      "Bash(sqlite3:*)",
+      "Bash(bd dep add:*)",
+      "Bash(bd dep tree:*)",
+      "Bash(bd ready:*)",
+      "Bash(bd show:*)",
+      "Bash(bd list:*)",
+      "Bash(pnpm eslint:*)",
+      "Bash(pnpm exec eslint:*)",
+      "WebFetch(domain:support.surfshark.com)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(git rm:*)"
     ]
   }
 }
