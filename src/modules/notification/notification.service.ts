@@ -4,6 +4,7 @@ import { execFile } from 'child_process';
 import { LoggerService } from '../../common/logger/logger.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { ProductDto } from '../api/dto/product.dto';
+import { PriceChange, AvailabilityChange } from '../differ/differ.service';
 
 /**
  * Rate limiting configuration
@@ -89,6 +90,140 @@ export class NotificationService implements OnModuleInit {
     }
   }
 
+  async sendPriceChangeNotification(
+    priceChange: PriceChange,
+  ): Promise<boolean> {
+    const {
+      product,
+      oldPrice,
+      newPrice,
+      oldCompareAtPrice,
+      newCompareAtPrice,
+    } = priceChange;
+
+    if (this.isRateLimited(product.id)) {
+      this.logger.warn(
+        `Rate limit hit for product ${product.id} - skipping notification`,
+        'NotificationService',
+      );
+      return false;
+    }
+
+    try {
+      const priceDescription = this.describePriceChange(oldPrice, newPrice);
+      const message = this.formatPriceChangeMessage(
+        product,
+        priceDescription,
+        oldPrice,
+        newPrice,
+        oldCompareAtPrice,
+        newCompareAtPrice,
+      );
+
+      this.logger.log(
+        `Sending price change notification for product: ${product.title}`,
+        'NotificationService',
+      );
+
+      await this.sendNativeNotification(message, 'Price Change');
+
+      this.notificationCache.set(product.id, Date.now());
+
+      this.recordNotification(product.id, true, {
+        productTitle: product.title,
+        availabilityChange: `price ${priceDescription}`,
+      });
+
+      this.logger.log(
+        `Price change notification sent successfully for product: ${product.title}`,
+        'NotificationService',
+      );
+
+      return true;
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to send price change notification for product ${product.id}: ${errorMessage}`,
+        'NotificationService',
+      );
+
+      const priceDescription = this.describePriceChange(oldPrice, newPrice);
+      this.recordNotification(product.id, false, {
+        productTitle: product.title,
+        availabilityChange: `price ${priceDescription}`,
+        errorMessage,
+      });
+
+      return false;
+    }
+  }
+
+  async sendAvailabilityChangeNotification(
+    availabilityChange: AvailabilityChange,
+  ): Promise<boolean> {
+    const { product, wasAvailable, isAvailable } = availabilityChange;
+
+    if (this.isRateLimited(product.id)) {
+      this.logger.warn(
+        `Rate limit hit for product ${product.id} - skipping notification`,
+        'NotificationService',
+      );
+      return false;
+    }
+
+    try {
+      const changeDescription = this.describeAvailabilityChangeStatus(
+        wasAvailable,
+        isAvailable,
+      );
+      const message = this.formatAvailabilityChangeMessage(
+        product,
+        changeDescription,
+      );
+
+      this.logger.log(
+        `Sending availability change notification for product: ${product.title}`,
+        'NotificationService',
+      );
+
+      await this.sendNativeNotification(message, 'Availability Update');
+
+      this.notificationCache.set(product.id, Date.now());
+
+      this.recordNotification(product.id, true, {
+        productTitle: product.title,
+        availabilityChange: changeDescription,
+      });
+
+      this.logger.log(
+        `Availability change notification sent successfully for product: ${product.title}`,
+        'NotificationService',
+      );
+
+      return true;
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to send availability change notification for product ${product.id}: ${errorMessage}`,
+        'NotificationService',
+      );
+
+      const changeDescription = this.describeAvailabilityChangeStatus(
+        wasAvailable,
+        isAvailable,
+      );
+      this.recordNotification(product.id, false, {
+        productTitle: product.title,
+        availabilityChange: changeDescription,
+        errorMessage,
+      });
+
+      return false;
+    }
+  }
+
   /**
    * Format a concise notification message for macOS notification center
    */
@@ -112,6 +247,47 @@ export class NotificationService implements OnModuleInit {
     return lines.join('\n');
   }
 
+  private formatPriceChangeMessage(
+    product: ProductDto,
+    priceDescription: string,
+    oldPrice: number,
+    newPrice: number,
+    oldCompareAtPrice?: number,
+    newCompareAtPrice?: number,
+  ): string {
+    const lines: string[] = [];
+
+    lines.push(`${product.title}`);
+    lines.push(`Price ${priceDescription}`);
+    lines.push(`Was: $${oldPrice.toFixed(2)} → Now: $${newPrice.toFixed(2)}`);
+
+    if (oldCompareAtPrice !== newCompareAtPrice && newCompareAtPrice) {
+      lines.push(`Compare at: $${newCompareAtPrice.toFixed(2)}`);
+    }
+
+    lines.push(`${product.url}`);
+
+    return lines.join('\n');
+  }
+
+  private formatAvailabilityChangeMessage(
+    product: ProductDto,
+    changeDescription: string,
+  ): string {
+    const lines: string[] = [];
+
+    lines.push(`${product.title}`);
+    lines.push(`${changeDescription}`);
+
+    if (product.price > 0) {
+      lines.push(`Price: $${product.price.toFixed(2)}`);
+    }
+
+    lines.push(`${product.url}`);
+
+    return lines.join('\n');
+  }
+
   /**
    * Describe the availability change for a product
    */
@@ -127,13 +303,39 @@ export class NotificationService implements OnModuleInit {
     }
   }
 
+  private describePriceChange(oldPrice: number, newPrice: number): string {
+    if (newPrice < oldPrice) {
+      return `dropped from $${oldPrice.toFixed(2)} to $${newPrice.toFixed(2)}`;
+    } else {
+      return `increased from $${oldPrice.toFixed(2)} to $${newPrice.toFixed(2)}`;
+    }
+  }
+
+  private describeAvailabilityChangeStatus(
+    wasAvailable: boolean,
+    isAvailable: boolean,
+  ): string {
+    if (!wasAvailable && isAvailable) {
+      return 'back in stock';
+    } else if (wasAvailable && !isAvailable) {
+      return 'sold out';
+    } else if (!wasAvailable && !isAvailable) {
+      return 'still unavailable';
+    } else {
+      return 'became available';
+    }
+  }
+
   /**
    * Send a native macOS notification via osascript.
    * Works reliably from detached daemon processes.
    */
-  private sendNativeNotification(message: string): Promise<void> {
+  private sendNativeNotification(
+    message: string,
+    subtitle: string = 'New Product Available',
+  ): Promise<void> {
     const escaped = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const script = `display notification "${escaped}" with title "LumenTUI" subtitle "New Product Available" sound name "default"`;
+    const script = `display notification "${escaped}" with title "LumenTUI" subtitle "${subtitle}" sound name "default"`;
     return new Promise<void>((resolve, reject) => {
       execFile('osascript', ['-e', script], (error: Error | null) => {
         if (error) {
@@ -377,6 +579,66 @@ export class NotificationService implements OnModuleInit {
 
     // If neither filter is set, or all checks pass, notify
     return true;
+  }
+
+  shouldNotifyPriceChange(
+    product: ProductDto,
+    priceChange: PriceChange,
+  ): boolean {
+    const priceChangesEnabled = this.configService.get<string>(
+      'LUMENTUI_NOTIFY_PRICE_CHANGES',
+    );
+
+    if (priceChangesEnabled === 'false') {
+      this.logger.log(
+        `Price change notifications disabled for product ${product.id}`,
+        'NotificationService',
+      );
+      return false;
+    }
+
+    const thresholdStr = this.configService.get<string>(
+      'LUMENTUI_NOTIFY_PRICE_THRESHOLD',
+      '0',
+    );
+    const threshold = parseFloat(thresholdStr) || 0;
+
+    if (threshold > 0 && priceChange.oldPrice > 0) {
+      const percentChange = Math.abs(
+        ((priceChange.newPrice - priceChange.oldPrice) / priceChange.oldPrice) *
+          100,
+      );
+
+      if (percentChange < threshold) {
+        this.logger.log(
+          `Price change ${percentChange.toFixed(2)}% below threshold ${threshold}% for product ${product.id}`,
+          'NotificationService',
+        );
+        return false;
+      }
+    }
+
+    return this.shouldNotify(product);
+  }
+
+  shouldNotifyAvailabilityChange(
+    product: ProductDto,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    availabilityChange: AvailabilityChange,
+  ): boolean {
+    const availabilityChangesEnabled = this.configService.get<string>(
+      'LUMENTUI_NOTIFY_AVAILABILITY_CHANGES',
+    );
+
+    if (availabilityChangesEnabled === 'false') {
+      this.logger.log(
+        `Availability change notifications disabled for product ${product.id}`,
+        'NotificationService',
+      );
+      return false;
+    }
+
+    return this.shouldNotify(product);
   }
 
   /**

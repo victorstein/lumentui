@@ -5,6 +5,7 @@ import { NotificationService } from './notification.service';
 import { LoggerService } from '../../common/logger/logger.service';
 import { DatabaseService } from '../storage/database/database.service';
 import { ProductDto } from '../api/dto/product.dto';
+import { PriceChange, AvailabilityChange } from '../differ/differ.service';
 import * as childProcess from 'child_process';
 
 // Mock child_process.execFile
@@ -1098,6 +1099,669 @@ describe('NotificationService', () => {
           availabilityChange: 'became available (1 variant(s))',
         }),
       );
+    });
+  });
+
+  describe('sendPriceChangeNotification', () => {
+    const mockPriceChange: PriceChange = {
+      product: mockProduct,
+      oldPrice: 59.99,
+      newPrice: 49.99,
+    };
+
+    it('should send price change notification successfully', async () => {
+      execFileSuccess();
+
+      const result = await service.sendPriceChangeNotification(mockPriceChange);
+
+      expect(result).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'osascript',
+        ['-e', expect.stringContaining('Test Gaming Mouse')],
+        expect.any(Function),
+      );
+    });
+
+    it('should format price drop message correctly', async () => {
+      execFileSuccess();
+
+      await service.sendPriceChangeNotification(mockPriceChange);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('dropped from $59.99 to $49.99');
+      expect(script).toContain('Price Change');
+    });
+
+    it('should format price increase message correctly', async () => {
+      execFileSuccess();
+
+      const priceIncrease: PriceChange = {
+        product: mockProduct,
+        oldPrice: 49.99,
+        newPrice: 59.99,
+      };
+
+      await service.sendPriceChangeNotification(priceIncrease);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('increased from $49.99 to $59.99');
+    });
+
+    it('should include compare at price changes', async () => {
+      execFileSuccess();
+
+      const priceChangeWithCompare: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+        oldCompareAtPrice: 79.99,
+        newCompareAtPrice: 69.99,
+      };
+
+      await service.sendPriceChangeNotification(priceChangeWithCompare);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('Compare at: $69.99');
+    });
+
+    it('should handle notification errors gracefully', async () => {
+      execFileError();
+
+      const result = await service.sendPriceChangeNotification(mockPriceChange);
+
+      expect(result).toBe(false);
+      expect(mockLoggerService.error).toHaveBeenCalled();
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        false,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.stringContaining('price'),
+          errorMessage: expect.any(String),
+        }),
+      );
+    });
+
+    it('should respect rate limiting', async () => {
+      execFileSuccess();
+
+      const result1 =
+        await service.sendPriceChangeNotification(mockPriceChange);
+      const result2 =
+        await service.sendPriceChangeNotification(mockPriceChange);
+
+      expect(result1).toBe(true);
+      expect(result2).toBe(false);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('should record successful notification in database', async () => {
+      execFileSuccess();
+
+      await service.sendPriceChangeNotification(mockPriceChange);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: expect.stringContaining('price dropped'),
+        }),
+      );
+    });
+  });
+
+  describe('sendAvailabilityChangeNotification', () => {
+    const mockAvailabilityChange: AvailabilityChange = {
+      product: mockProduct,
+      wasAvailable: false,
+      isAvailable: true,
+    };
+
+    it('should send back in stock notification successfully', async () => {
+      execFileSuccess();
+
+      const result = await service.sendAvailabilityChangeNotification(
+        mockAvailabilityChange,
+      );
+
+      expect(result).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'osascript',
+        ['-e', expect.stringContaining('Test Gaming Mouse')],
+        expect.any(Function),
+      );
+    });
+
+    it('should format back in stock message correctly', async () => {
+      execFileSuccess();
+
+      await service.sendAvailabilityChangeNotification(mockAvailabilityChange);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('back in stock');
+      expect(script).toContain('Availability Update');
+    });
+
+    it('should format sold out message correctly', async () => {
+      execFileSuccess();
+
+      const soldOut: AvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: true,
+        isAvailable: false,
+      };
+
+      await service.sendAvailabilityChangeNotification(soldOut);
+
+      const script = mockExecFile.mock.calls[0][1][1] as string;
+      expect(script).toContain('sold out');
+    });
+
+    it('should handle still unavailable case', async () => {
+      execFileSuccess();
+
+      const stillUnavailable: AvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: false,
+      };
+
+      await service.sendAvailabilityChangeNotification(stillUnavailable);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          availabilityChange: 'still unavailable',
+        }),
+      );
+    });
+
+    it('should handle notification errors gracefully', async () => {
+      execFileError();
+
+      const result = await service.sendAvailabilityChangeNotification(
+        mockAvailabilityChange,
+      );
+
+      expect(result).toBe(false);
+      expect(mockLoggerService.error).toHaveBeenCalled();
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        false,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: 'back in stock',
+          errorMessage: expect.any(String),
+        }),
+      );
+    });
+
+    it('should respect rate limiting', async () => {
+      execFileSuccess();
+
+      const result1 = await service.sendAvailabilityChangeNotification(
+        mockAvailabilityChange,
+      );
+      const result2 = await service.sendAvailabilityChangeNotification(
+        mockAvailabilityChange,
+      );
+
+      expect(result1).toBe(true);
+      expect(result2).toBe(false);
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('should record successful notification in database', async () => {
+      execFileSuccess();
+
+      await service.sendAvailabilityChangeNotification(mockAvailabilityChange);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+          availabilityChange: 'back in stock',
+        }),
+      );
+    });
+  });
+
+  describe('describePriceChange', () => {
+    it('should describe price drop correctly', () => {
+      const result = (service as any).describePriceChange(59.99, 49.99);
+      expect(result).toBe('dropped from $59.99 to $49.99');
+    });
+
+    it('should describe price increase correctly', () => {
+      const result = (service as any).describePriceChange(49.99, 59.99);
+      expect(result).toBe('increased from $49.99 to $59.99');
+    });
+
+    it('should handle equal prices', () => {
+      const result = (service as any).describePriceChange(49.99, 49.99);
+      expect(result).toBe('increased from $49.99 to $49.99');
+    });
+
+    it('should format decimal places correctly', () => {
+      const result = (service as any).describePriceChange(10, 5.5);
+      expect(result).toBe('dropped from $10.00 to $5.50');
+    });
+  });
+
+  describe('shouldNotifyPriceChange', () => {
+    const mockPriceChange: PriceChange = {
+      product: mockProduct,
+      oldPrice: 59.99,
+      newPrice: 49.99,
+    };
+
+    it('should return true when price change notifications are enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_CHANGES') return 'true';
+        return '';
+      });
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        mockPriceChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when price change notifications are disabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_CHANGES') return 'false';
+        return '';
+      });
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        mockPriceChange,
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should default to true when config is not set', () => {
+      mockConfigService.get = jest.fn().mockReturnValue(undefined);
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        mockPriceChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should respect min price filter when enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '100';
+        return '';
+      });
+
+      const cheapProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Default',
+            price: 50,
+            sku: 'SKU',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const cheapPriceChange: PriceChange = {
+        product: cheapProduct,
+        oldPrice: 60,
+        newPrice: 50,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        cheapProduct,
+        cheapPriceChange,
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should respect keywords filter when enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return 'laptop,keyboard';
+        return '';
+      });
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        mockPriceChange,
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should allow all price changes when threshold is 0', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '0';
+        return '';
+      });
+
+      const smallChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 101,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, smallChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should block price changes below threshold percentage', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const smallChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 105,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, smallChange);
+
+      expect(result).toBe(false);
+      expect(mockLoggerService.log).toHaveBeenCalledWith(
+        expect.stringContaining('5.00% below threshold 10%'),
+        'NotificationService',
+      );
+    });
+
+    it('should allow price changes above threshold percentage', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const largeChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 115,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, largeChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle threshold check for price increases', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const priceIncrease: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 112,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        priceIncrease,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle threshold check for price decreases', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const priceDecrease: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 88,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        priceDecrease,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle edge case when old price is 0', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const zeroPriceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 0,
+        newPrice: 50,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        zeroPriceChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle invalid threshold values gracefully', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return 'invalid';
+        return '';
+      });
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 105,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, priceChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle negative threshold values', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '-10';
+        return '';
+      });
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 105,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, priceChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle threshold at exactly the change percentage', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        return '';
+      });
+
+      const exactThresholdChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 110,
+      };
+
+      const result = service.shouldNotifyPriceChange(
+        mockProduct,
+        exactThresholdChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should combine threshold with other filters', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '50';
+        return '';
+      });
+
+      const largeChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 100,
+        newPrice: 115,
+      };
+
+      const result = service.shouldNotifyPriceChange(mockProduct, largeChange);
+
+      expect(result).toBe(true);
+    });
+
+    it('should block when threshold passes but price filter fails', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_PRICE_THRESHOLD') return '10';
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '200';
+        return '';
+      });
+
+      const cheapProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Default',
+            price: 50,
+            sku: 'SKU',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const largeChange: PriceChange = {
+        product: cheapProduct,
+        oldPrice: 100,
+        newPrice: 115,
+      };
+
+      const result = service.shouldNotifyPriceChange(cheapProduct, largeChange);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('shouldNotifyAvailabilityChange', () => {
+    const mockAvailabilityChange: AvailabilityChange = {
+      product: mockProduct,
+      wasAvailable: false,
+      isAvailable: true,
+    };
+
+    it('should return true when availability change notifications are enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_AVAILABILITY_CHANGES') return 'true';
+        return '';
+      });
+
+      const result = service.shouldNotifyAvailabilityChange(
+        mockProduct,
+        mockAvailabilityChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when availability change notifications are disabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_AVAILABILITY_CHANGES') return 'false';
+        return '';
+      });
+
+      const result = service.shouldNotifyAvailabilityChange(
+        mockProduct,
+        mockAvailabilityChange,
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should default to true when config is not set', () => {
+      mockConfigService.get = jest.fn().mockReturnValue(undefined);
+
+      const result = service.shouldNotifyAvailabilityChange(
+        mockProduct,
+        mockAvailabilityChange,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should respect min price filter when enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_MIN_PRICE') return '100';
+        return '';
+      });
+
+      const cheapProduct: ProductDto = {
+        ...mockProduct,
+        price: 50,
+        variants: [
+          {
+            id: '1',
+            title: 'Default',
+            price: 50,
+            sku: 'SKU',
+            available: true,
+            inventoryQuantity: 1,
+          },
+        ],
+      };
+
+      const cheapAvailabilityChange: AvailabilityChange = {
+        product: cheapProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      const result = service.shouldNotifyAvailabilityChange(
+        cheapProduct,
+        cheapAvailabilityChange,
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should respect keywords filter when enabled', () => {
+      mockConfigService.get = jest.fn((key: string) => {
+        if (key === 'LUMENTUI_NOTIFY_KEYWORDS') return 'laptop,keyboard';
+        return '';
+      });
+
+      const result = service.shouldNotifyAvailabilityChange(
+        mockProduct,
+        mockAvailabilityChange,
+      );
+
+      expect(result).toBe(false);
     });
   });
 });
