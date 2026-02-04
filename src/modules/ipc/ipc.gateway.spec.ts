@@ -273,6 +273,86 @@ describe('IpcGateway', () => {
         timestamp: expect.any(Number),
       });
     });
+
+    it('should emit product price change', () => {
+      const priceChange = {
+        product: {
+          id: 'prod1',
+          title: 'Test Product',
+          handle: 'test-product',
+          url: 'https://shop.lumenalta.com/products/test-product',
+          vendor: 'Vendor',
+          product_type: 'Type',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          published_at: '2024-01-01T00:00:00Z',
+          status: 'active',
+          variants: [],
+          images: [],
+          tags: [],
+          options: [],
+          price: 15.0,
+          compareAtPrice: 20.0,
+          available: true,
+        },
+        oldPrice: 10.0,
+        newPrice: 15.0,
+        oldCompareAtPrice: 18.0,
+        newCompareAtPrice: 20.0,
+      };
+
+      gateway.emitProductPriceChanged(priceChange);
+
+      expect(ipc.server.broadcast).toHaveBeenCalledWith(
+        'product:price-changed',
+        {
+          product: priceChange.product,
+          oldPrice: 10.0,
+          newPrice: 15.0,
+          oldCompareAtPrice: 18.0,
+          newCompareAtPrice: 20.0,
+          timestamp: expect.any(Number),
+        },
+      );
+    });
+
+    it('should emit product availability change', () => {
+      const availabilityChange = {
+        product: {
+          id: 'prod1',
+          title: 'Test Product',
+          handle: 'test-product',
+          url: 'https://shop.lumenalta.com/products/test-product',
+          vendor: 'Vendor',
+          product_type: 'Type',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          published_at: '2024-01-01T00:00:00Z',
+          status: 'active',
+          variants: [],
+          images: [],
+          tags: [],
+          options: [],
+          price: 10.0,
+          compareAtPrice: null,
+          available: true,
+        },
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      gateway.emitProductAvailabilityChanged(availabilityChange);
+
+      expect(ipc.server.broadcast).toHaveBeenCalledWith(
+        'product:availability-changed',
+        {
+          product: availabilityChange.product,
+          wasAvailable: false,
+          isAvailable: true,
+          timestamp: expect.any(Number),
+        },
+      );
+    });
   });
 
   describe('Status', () => {
@@ -311,10 +391,62 @@ describe('IpcGateway', () => {
 
   describe('Edge Cases', () => {
     it('should not emit events when server is not running', () => {
+      const priceChange = {
+        product: {
+          id: 'prod1',
+          title: 'Test Product',
+          handle: 'test-product',
+          url: 'https://shop.lumenalta.com/products/test-product',
+          vendor: 'Vendor',
+          product_type: 'Type',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          published_at: '2024-01-01T00:00:00Z',
+          status: 'active',
+          variants: [],
+          images: [],
+          tags: [],
+          options: [],
+          price: 15.0,
+          compareAtPrice: 20.0,
+          available: true,
+        },
+        oldPrice: 10.0,
+        newPrice: 15.0,
+        oldCompareAtPrice: 18.0,
+        newCompareAtPrice: 20.0,
+      };
+
+      const availabilityChange = {
+        product: {
+          id: 'prod1',
+          title: 'Test Product',
+          handle: 'test-product',
+          url: 'https://shop.lumenalta.com/products/test-product',
+          vendor: 'Vendor',
+          product_type: 'Type',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          published_at: '2024-01-01T00:00:00Z',
+          status: 'active',
+          variants: [],
+          images: [],
+          tags: [],
+          options: [],
+          price: 10.0,
+          compareAtPrice: null,
+          available: true,
+        },
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
       gateway.emitHeartbeat(Date.now());
       gateway.emitProductsUpdated([]);
       gateway.emitError('error');
       gateway.emitLog('info', 'message');
+      gateway.emitProductPriceChanged(priceChange);
+      gateway.emitProductAvailabilityChanged(availabilityChange);
 
       expect(ipc.server.broadcast).not.toHaveBeenCalled();
     });
@@ -325,6 +457,128 @@ describe('IpcGateway', () => {
 
       // Should only be called once
       expect(ipc.serve).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Log Buffer', () => {
+    beforeEach(async () => {
+      await gateway.onModuleInit();
+    });
+
+    it('should store logs in buffer', () => {
+      gateway.emitLog('info', 'Test message 1');
+      gateway.emitLog('warn', 'Test message 2');
+
+      expect(ipc.server.broadcast).toHaveBeenCalledTimes(2);
+      expect(ipc.server.broadcast).toHaveBeenCalledWith(
+        'log',
+        expect.objectContaining({
+          level: 'info',
+          message: 'Test message 1',
+          timestamp: expect.any(Number),
+        }),
+      );
+    });
+
+    it('should not exceed max buffer size', () => {
+      for (let i = 0; i < 150; i++) {
+        gateway.emitLog('info', `Message ${i}`);
+      }
+
+      expect(ipc.server.broadcast).toHaveBeenCalledTimes(150);
+    });
+
+    it('should send log history to newly connected client', () => {
+      gateway.emitLog('info', 'Message 1');
+      gateway.emitLog('warn', 'Message 2');
+      gateway.emitLog('error', 'Message 3');
+
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const connectCall = calls.find((call) => call[0] === 'connect');
+      const connectHandler = connectCall[1];
+
+      const mockSocket = { id: 'test-socket' };
+      connectHandler(mockSocket);
+
+      expect(ipc.server.emit).toHaveBeenCalledWith(mockSocket, 'log', {
+        level: 'info',
+        message: 'Message 1',
+        timestamp: expect.any(Number),
+      });
+      expect(ipc.server.emit).toHaveBeenCalledWith(mockSocket, 'log', {
+        level: 'warn',
+        message: 'Message 2',
+        timestamp: expect.any(Number),
+      });
+      expect(ipc.server.emit).toHaveBeenCalledWith(mockSocket, 'log', {
+        level: 'error',
+        message: 'Message 3',
+        timestamp: expect.any(Number),
+      });
+    });
+
+    it('should send logs in chronological order on connect', () => {
+      const emitCalls: any[] = [];
+      (ipc.server.emit as jest.Mock).mockImplementation(
+        (socket: any, event: string, data: any) => {
+          if (event === 'log') {
+            emitCalls.push(data);
+          }
+        },
+      );
+
+      gateway.emitLog('info', 'First');
+      gateway.emitLog('warn', 'Second');
+      gateway.emitLog('error', 'Third');
+
+      emitCalls.length = 0;
+
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const connectCall = calls.find((call) => call[0] === 'connect');
+      const connectHandler = connectCall[1];
+
+      const mockSocket = { id: 'test-socket' };
+      connectHandler(mockSocket);
+
+      expect(emitCalls.length).toBe(3);
+      expect(emitCalls[0].message).toBe('First');
+      expect(emitCalls[1].message).toBe('Second');
+      expect(emitCalls[2].message).toBe('Third');
+    });
+
+    it('should maintain circular buffer (oldest removed first)', () => {
+      const emitCalls: any[] = [];
+      (ipc.server.broadcast as jest.Mock).mockImplementation(
+        (event: string, data: any) => {
+          if (event === 'log') {
+            emitCalls.push(data);
+          }
+        },
+      );
+
+      for (let i = 0; i < 110; i++) {
+        gateway.emitLog('info', `Message ${i}`);
+      }
+
+      const calls = (ipc.server.on as jest.Mock).mock.calls;
+      const connectCall = calls.find((call) => call[0] === 'connect');
+      const connectHandler = connectCall[1];
+
+      const sentLogs: any[] = [];
+      (ipc.server.emit as jest.Mock).mockImplementation(
+        (socket: any, event: string, data: any) => {
+          if (event === 'log') {
+            sentLogs.push(data);
+          }
+        },
+      );
+
+      const mockSocket = { id: 'test-socket' };
+      connectHandler(mockSocket);
+
+      expect(sentLogs.length).toBe(100);
+      expect(sentLogs[0].message).toBe('Message 10');
+      expect(sentLogs[99].message).toBe('Message 109');
     });
   });
 

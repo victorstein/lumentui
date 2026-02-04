@@ -1,7 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import { fileURLToPath } from 'url';
 
 /**
  * Centralized path resolution utility for LumenTUI
@@ -14,24 +13,15 @@ export class PathsUtil {
   /**
    * Get __dirname equivalent for both CommonJS and ESM
    * In CommonJS: uses global __dirname
-   * In ESM: converts import.meta.url to path
+   * In ESM: not supported (production code runs in CommonJS)
    */
   private static getDirname(): string {
-    // Check if we're in CommonJS or ESM
     if (typeof __dirname !== 'undefined') {
-      // CommonJS
       return __dirname;
-    } else {
-      // ESM - use import.meta.url
-      // Use Function() to hide import.meta from parsers (like Jest)
-      // that don't support ESM syntax
-      // Justification: Function() constructor is required to hide import.meta from Jest parser
-      // which runs in CommonJS mode and throws SyntaxError on import.meta even in dead code paths
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
-      const getMetaUrl = new Function('return import.meta.url');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument
-      return path.dirname(fileURLToPath(getMetaUrl()));
     }
+    throw new Error(
+      'PathsUtil.getDirname(): __dirname is not defined. This utility only works in CommonJS mode.',
+    );
   }
 
   /**

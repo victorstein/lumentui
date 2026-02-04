@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import { theme } from '../theme.js';
@@ -12,9 +12,6 @@ interface StatusBarProps {
   appView?: 'main' | 'history';
 }
 
-/**
- * Bottom status bar with stats and hotkeys
- */
 export const StatusBar: React.FC<StatusBarProps> = ({
   lastHeartbeat,
   productCount,
@@ -23,6 +20,16 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   polling,
   appView = 'main',
 }) => {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const getNextPollTime = () => {
     if (!lastHeartbeat) return 'N/A';
 

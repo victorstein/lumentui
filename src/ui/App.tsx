@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput, useApp, useStdout } from 'ink';
-import { useDaemon } from './hooks/useDaemon.js';
+import { DaemonProvider, useDaemonContext } from './context/DaemonContext.js';
 import { useProducts } from './hooks/useProducts.js';
 import { Header } from './components/Header.js';
 import { ProductList } from './components/ProductList.js';
@@ -13,10 +13,7 @@ import { theme } from './theme.js';
 
 type AppView = 'main' | 'history';
 
-/**
- * Main TUI Application Component
- */
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const terminalHeight = stdout?.rows ?? 24;
@@ -24,7 +21,6 @@ const App: React.FC = () => {
 
   const [appView, setAppView] = useState<AppView>('main');
 
-  // Connect to daemon via IPC
   const {
     connected,
     lastHeartbeat,
@@ -35,7 +31,7 @@ const App: React.FC = () => {
     newProductNotification,
     forcePoll,
     clearError,
-  } = useDaemon();
+  } = useDaemonContext();
 
   // Product selection and filtering
   const {
@@ -210,9 +206,8 @@ const App: React.FC = () => {
                 {terminalWidth >= 60 && (
                   <Box
                     width={terminalWidth >= 100 ? '40%' : '100%'}
-                    height={terminalWidth >= 100 ? undefined : 8}
                     flexDirection="column"
-                    flexGrow={terminalWidth >= 100 ? 1 : 0}
+                    flexGrow={1}
                     flexShrink={0}
                   >
                     <LogPanel logs={logs} />
@@ -234,6 +229,14 @@ const App: React.FC = () => {
         </>
       )}
     </Box>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <DaemonProvider>
+      <AppContent />
+    </DaemonProvider>
   );
 };
 
