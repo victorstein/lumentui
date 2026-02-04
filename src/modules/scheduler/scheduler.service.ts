@@ -95,10 +95,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     success: boolean;
     productCount: number;
     newProducts: number;
+    priceChanges: number;
+    availabilityChanges: number;
     durationMs: number;
     error?: string;
   }> {
-    // Prevent concurrent polls
     if (this.isPolling) {
       this.logger.warn(
         'Poll already in progress, skipping',
@@ -108,6 +109,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         success: false,
         productCount: 0,
         newProducts: 0,
+        priceChanges: 0,
+        availabilityChanges: 0,
         durationMs: 0,
         error: 'Poll already in progress',
       };
@@ -150,15 +153,15 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // Get existing products and use DifferService to detect new ones
       const existingProductEntities = this.databaseService.getProducts();
       const existingProducts = StorageNormalizer.fromEntities(
         existingProductEntities,
       );
-      const { newProducts: newProductList } = this.differService.compare(
-        existingProducts,
-        productsToSave,
-      );
+      const {
+        newProducts: newProductList,
+        priceChanges,
+        availabilityChanges,
+      } = this.differService.compare(existingProducts, productsToSave);
       const newProducts = newProductList.length;
 
       // Save products to database
@@ -173,7 +176,6 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         this.ipcGateway.emitProductNew(newProduct);
       }
 
-      // Send notifications for new products (skip on initial fetch when DB was empty)
       const isInitialFetch = existingProductEntities.length === 0;
       if (isInitialFetch && newProductList.length > 0) {
         this.logger.log(
@@ -188,7 +190,6 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
 
         for (const newProduct of newProductList) {
           try {
-            // Check if product should be notified based on filters
             if (this.notificationService.shouldNotify(newProduct)) {
               await this.notificationService.sendAvailabilityNotification(
                 newProduct,
@@ -199,7 +200,6 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
               );
             }
           } catch (error) {
-            // Log error but don't break the poll flow
             this.logger.error(
               `Failed to send notification for product ${newProduct.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
               error instanceof Error ? error.stack : undefined,
@@ -209,9 +209,60 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      for (const priceChange of priceChanges) {
+        try {
+          if (
+            this.notificationService.shouldNotifyPriceChange(
+              priceChange.product,
+              priceChange,
+            )
+          ) {
+            await this.notificationService.sendPriceChangeNotification(
+              priceChange,
+            );
+            this.ipcGateway.emitLog(
+              'info',
+              `Price change: ${priceChange.product.title}`,
+            );
+          }
+          this.ipcGateway.emitProductPriceChanged(priceChange);
+        } catch (error) {
+          this.logger.error(
+            `Failed to notify price change for product ${priceChange.product.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            error instanceof Error ? error.stack : undefined,
+            'SchedulerService',
+          );
+        }
+      }
+
+      for (const availabilityChange of availabilityChanges) {
+        try {
+          if (
+            this.notificationService.shouldNotifyAvailabilityChange(
+              availabilityChange.product,
+              availabilityChange,
+            )
+          ) {
+            await this.notificationService.sendAvailabilityChangeNotification(
+              availabilityChange,
+            );
+            this.ipcGateway.emitLog(
+              'info',
+              `Availability change: ${availabilityChange.product.title}`,
+            );
+          }
+          this.ipcGateway.emitProductAvailabilityChanged(availabilityChange);
+        } catch (error) {
+          this.logger.error(
+            `Failed to notify availability change for product ${availabilityChange.product.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            error instanceof Error ? error.stack : undefined,
+            'SchedulerService',
+          );
+        }
+      }
+
       const durationMs = Date.now() - startTime;
 
-      // Record poll metrics
       const pollMetrics = {
         productCount: savedCount,
         newProducts,
@@ -223,11 +274,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
 
       this.ipcGateway.emitLog(
         'info',
-        `Poll complete: ${savedCount} products, ${newProducts} new (${durationMs}ms)`,
+        `Poll complete: ${savedCount} products, ${newProducts} new, ${priceChanges.length} price changes, ${availabilityChanges.length} availability changes (${durationMs}ms)`,
       );
 
       this.logger.log(
-        `Poll completed: ${savedCount} products, ${newProducts} new, ${durationMs}ms`,
+        `Poll completed: ${savedCount} products, ${newProducts} new, ${priceChanges.length} price changes, ${availabilityChanges.length} availability changes, ${durationMs}ms`,
         'SchedulerService',
       );
 
@@ -235,6 +286,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         success: true,
         productCount: savedCount,
         newProducts,
+        priceChanges: priceChanges.length,
+        availabilityChanges: availabilityChanges.length,
         durationMs,
       };
     } catch (error) {
@@ -252,7 +305,6 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       this.ipcGateway.emitLog('error', `Poll failed: ${errorMessage}`);
       this.ipcGateway.emitError(errorMessage);
 
-      // Record failed poll
       this.databaseService.recordPoll({
         productCount: 0,
         newProducts: 0,
@@ -265,6 +317,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         success: false,
         productCount: 0,
         newProducts: 0,
+        priceChanges: 0,
+        availabilityChanges: 0,
         durationMs,
         error: errorMessage,
       };
@@ -276,20 +330,17 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Force an immediate poll, bypassing the cron schedule
-   * Respects the existing isPolling flag to prevent concurrent polls
-   */
   async forcePoll(): Promise<{
     success: boolean;
     productCount: number;
     newProducts: number;
+    priceChanges: number;
+    availabilityChanges: number;
     durationMs: number;
     error?: string;
   }> {
     this.logger.log('Force poll requested', 'SchedulerService');
 
-    // Check if already polling
     if (this.isPolling) {
       this.logger.warn(
         'Poll already in progress, cannot force poll',
@@ -299,12 +350,13 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         success: false,
         productCount: 0,
         newProducts: 0,
+        priceChanges: 0,
+        availabilityChanges: 0,
         durationMs: 0,
         error: 'Poll already in progress',
       };
     }
 
-    // Execute the poll immediately
     return this.handlePoll();
   }
 

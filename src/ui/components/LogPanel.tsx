@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text, Static } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import { theme } from '../theme.js';
 import { LogEntry } from '../hooks/useDaemon.js';
 
@@ -10,7 +10,7 @@ interface LogPanelProps {
 }
 
 /**
- * Log panel component showing daemon logs with Static for performance
+ * Log panel component showing daemon logs with dynamic updates
  */
 export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
   const getLogColor = (level: string) => {
@@ -49,6 +49,14 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
     return new Date(timestamp).toLocaleTimeString();
   };
 
+  const reversedLogs = [...logs].reverse();
+
+  const { stdout } = useStdout();
+  const terminalHeight = stdout?.rows || 24;
+
+  const maxVisibleLogs = Math.max(5, terminalHeight - 12);
+  const visibleLogs = reversedLogs.slice(0, maxVisibleLogs);
+
   return (
     <Box
       flexDirection="column"
@@ -67,32 +75,30 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
       </Box>
 
       {/* Logs */}
-      <Box flexDirection="column" paddingX={1} flexGrow={1}>
+      <Box flexDirection="column" paddingX={1} paddingBottom={1} flexGrow={1}>
         {logs.length === 0 ? (
           <Text color={theme.colors.textMuted}>No logs yet...</Text>
         ) : (
           <>
-            <Static items={logs}>
-              {(log, index) => (
-                <Box key={index} flexShrink={0}>
-                  <Text color={theme.colors.textMuted}>
-                    {formatTime(log.timestamp)}{' '}
-                  </Text>
-                  <Text color={getLogColor(log.level)}>
-                    {getLogSymbol(log.level)}{' '}
-                  </Text>
-                  <Text wrap="truncate">{log.message}</Text>
-                </Box>
-              )}
-            </Static>
             {logs.length >= MAX_LOG_BUFFER && (
-              <Box paddingTop={1}>
+              <Box paddingBottom={1}>
                 <Text color={theme.colors.textMuted} italic>
                   {theme.symbols.info} Buffer full ({MAX_LOG_BUFFER} entries) -
                   older logs cleared
                 </Text>
               </Box>
             )}
+            {visibleLogs.map((log, index) => (
+              <Box key={index} flexShrink={0}>
+                <Text color={theme.colors.textMuted}>
+                  {formatTime(log.timestamp)}{' '}
+                </Text>
+                <Text color={getLogColor(log.level)}>
+                  {getLogSymbol(log.level)}{' '}
+                </Text>
+                <Text wrap="truncate">{log.message}</Text>
+              </Box>
+            ))}
           </>
         )}
       </Box>

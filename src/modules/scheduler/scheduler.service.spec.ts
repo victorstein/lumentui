@@ -137,7 +137,11 @@ describe('SchedulerService', () => {
 
     const mockNotificationService = {
       shouldNotify: jest.fn(),
+      shouldNotifyPriceChange: jest.fn(),
+      shouldNotifyAvailabilityChange: jest.fn(),
       sendAvailabilityNotification: jest.fn(),
+      sendPriceChangeNotification: jest.fn(),
+      sendAvailabilityChangeNotification: jest.fn(),
       getNotificationHistory: jest.fn(),
       clearRateLimitCache: jest.fn(),
       getRateLimitStatus: jest.fn(),
@@ -319,10 +323,11 @@ describe('SchedulerService', () => {
     beforeEach(() => {
       // Reset polling state
       (service as any).isPolling = false;
-      // Setup default differ mock - tests can override this
       differService.compare.mockReturnValue({
         newProducts: [],
         updatedProducts: [],
+        priceChanges: [],
+        availabilityChanges: [],
       });
     });
 
@@ -331,28 +336,6 @@ describe('SchedulerService', () => {
       databaseService.getProducts.mockReturnValue([]);
       databaseService.saveProducts.mockReturnValue(1);
       databaseService.recordPoll.mockReturnValue(1);
-      // Mock differ to return the new product
-      differService.compare.mockReturnValue({
-        newProducts: [
-          {
-            id: '123456',
-            title: 'Test Product',
-            handle: 'test-product',
-            url: 'https://shop.lumenalta.com/products/test-product',
-            vendor: 'Test Vendor',
-            product_type: 'Test Type',
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z',
-            published_at: '2024-01-01T00:00:00Z',
-            status: 'active',
-            variants: [],
-            images: [],
-            tags: [],
-            options: [],
-          },
-        ],
-        updatedProducts: [],
-      });
       differService.compare.mockReturnValue({
         newProducts: [
           {
@@ -368,6 +351,8 @@ describe('SchedulerService', () => {
           },
         ],
         updatedProducts: [],
+        priceChanges: [],
+        availabilityChanges: [],
       });
 
       const result = await service.handlePoll();
@@ -375,6 +360,8 @@ describe('SchedulerService', () => {
       expect(result.success).toBe(true);
       expect(result.productCount).toBe(1);
       expect(result.newProducts).toBe(1);
+      expect(result.priceChanges).toBe(0);
+      expect(result.availabilityChanges).toBe(0);
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
       expect(shopifyService.getProducts).toHaveBeenCalled();
       expect(databaseService.saveProducts).toHaveBeenCalled();
@@ -386,7 +373,6 @@ describe('SchedulerService', () => {
         }),
       );
 
-      // Verify IPC events
       expect(ipcGateway.emitProductsUpdated).toHaveBeenCalled();
       expect(ipcGateway.emitProductNew).toHaveBeenCalled();
       expect(ipcGateway.emitHeartbeat).toHaveBeenCalled();
@@ -412,12 +398,14 @@ describe('SchedulerService', () => {
           },
         ],
         updatedProducts: [],
+        priceChanges: [],
+        availabilityChanges: [],
       });
 
       const result = await service.handlePoll();
 
       expect(result.success).toBe(true);
-      expect(result.newProducts).toBe(1); // New product not in existing
+      expect(result.newProducts).toBe(1);
     });
 
     it('should handle poll for specific product', async () => {
@@ -533,6 +521,753 @@ describe('SchedulerService', () => {
         }),
       );
     });
+
+    it('should send price change notification when filter passes', async () => {
+      const mockProduct = {
+        id: '123456',
+        title: 'Test Product',
+        handle: 'test-product',
+        price: 79.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Test description',
+        url: 'https://shop.lumenalta.com/products/test-product',
+      };
+
+      const mockPriceChange = {
+        product: mockProduct,
+        oldPrice: 99.99,
+        newPrice: 79.99,
+        oldCompareAtPrice: undefined,
+        newCompareAtPrice: undefined,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [mockPriceChange],
+        availabilityChanges: [],
+      });
+      notificationService.shouldNotifyPriceChange.mockReturnValue(true);
+      notificationService.sendPriceChangeNotification.mockResolvedValue(true);
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.priceChanges).toBe(1);
+      expect(notificationService.shouldNotifyPriceChange).toHaveBeenCalledWith(
+        mockProduct,
+        mockPriceChange,
+      );
+      expect(
+        notificationService.sendPriceChangeNotification,
+      ).toHaveBeenCalledWith(mockPriceChange);
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        'Price change: Test Product',
+      );
+    });
+
+    it('should skip price change notification when filter fails', async () => {
+      const mockProduct = {
+        id: '123456',
+        title: 'Test Product',
+        handle: 'test-product',
+        price: 79.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Test description',
+        url: 'https://shop.lumenalta.com/products/test-product',
+      };
+
+      const mockPriceChange = {
+        product: mockProduct,
+        oldPrice: 99.99,
+        newPrice: 79.99,
+        oldCompareAtPrice: undefined,
+        newCompareAtPrice: undefined,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [mockPriceChange],
+        availabilityChanges: [],
+      });
+      notificationService.shouldNotifyPriceChange.mockReturnValue(false);
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.priceChanges).toBe(1);
+      expect(notificationService.shouldNotifyPriceChange).toHaveBeenCalledWith(
+        mockProduct,
+        mockPriceChange,
+      );
+      expect(
+        notificationService.sendPriceChangeNotification,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should send availability change notification when filter passes', async () => {
+      const mockProduct = {
+        id: '123456',
+        title: 'Test Product',
+        handle: 'test-product',
+        price: 99.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Test description',
+        url: 'https://shop.lumenalta.com/products/test-product',
+      };
+
+      const mockAvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [],
+        availabilityChanges: [mockAvailabilityChange],
+      });
+      notificationService.shouldNotifyAvailabilityChange.mockReturnValue(true);
+      notificationService.sendAvailabilityChangeNotification.mockResolvedValue(
+        true,
+      );
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.availabilityChanges).toBe(1);
+      expect(
+        notificationService.shouldNotifyAvailabilityChange,
+      ).toHaveBeenCalledWith(mockProduct, mockAvailabilityChange);
+      expect(
+        notificationService.sendAvailabilityChangeNotification,
+      ).toHaveBeenCalledWith(mockAvailabilityChange);
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        'Availability change: Test Product',
+      );
+    });
+
+    it('should skip availability change notification when filter fails', async () => {
+      const mockProduct = {
+        id: '123456',
+        title: 'Test Product',
+        handle: 'test-product',
+        price: 99.99,
+        available: false,
+        variants: [],
+        images: [],
+        description: 'Test description',
+        url: 'https://shop.lumenalta.com/products/test-product',
+      };
+
+      const mockAvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: true,
+        isAvailable: false,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [],
+        availabilityChanges: [mockAvailabilityChange],
+      });
+      notificationService.shouldNotifyAvailabilityChange.mockReturnValue(false);
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.availabilityChanges).toBe(1);
+      expect(
+        notificationService.shouldNotifyAvailabilityChange,
+      ).toHaveBeenCalledWith(mockProduct, mockAvailabilityChange);
+      expect(
+        notificationService.sendAvailabilityChangeNotification,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should process multiple changes in single poll', async () => {
+      const mockProduct1 = {
+        id: '111',
+        title: 'Product 1',
+        handle: 'product-1',
+        price: 79.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Product 1',
+        url: 'https://shop.lumenalta.com/products/product-1',
+      };
+
+      const mockProduct2 = {
+        id: '222',
+        title: 'Product 2',
+        handle: 'product-2',
+        price: 49.99,
+        available: false,
+        variants: [],
+        images: [],
+        description: 'Product 2',
+        url: 'https://shop.lumenalta.com/products/product-2',
+      };
+
+      const mockPriceChange = {
+        product: mockProduct1,
+        oldPrice: 99.99,
+        newPrice: 79.99,
+        oldCompareAtPrice: undefined,
+        newCompareAtPrice: undefined,
+      };
+
+      const mockAvailabilityChange = {
+        product: mockProduct2,
+        wasAvailable: true,
+        isAvailable: false,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(2);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct1, mockProduct2],
+        priceChanges: [mockPriceChange],
+        availabilityChanges: [mockAvailabilityChange],
+      });
+      notificationService.shouldNotifyPriceChange.mockReturnValue(true);
+      notificationService.shouldNotifyAvailabilityChange.mockReturnValue(true);
+      notificationService.sendPriceChangeNotification.mockResolvedValue(true);
+      notificationService.sendAvailabilityChangeNotification.mockResolvedValue(
+        true,
+      );
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.priceChanges).toBe(1);
+      expect(result.availabilityChanges).toBe(1);
+      expect(
+        notificationService.sendPriceChangeNotification,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        notificationService.sendAvailabilityChangeNotification,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle price change notification errors gracefully', async () => {
+      const mockProduct = {
+        id: '123456',
+        title: 'Test Product',
+        handle: 'test-product',
+        price: 79.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Test description',
+        url: 'https://shop.lumenalta.com/products/test-product',
+      };
+
+      const mockPriceChange = {
+        product: mockProduct,
+        oldPrice: 99.99,
+        newPrice: 79.99,
+        oldCompareAtPrice: undefined,
+        newCompareAtPrice: undefined,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [mockPriceChange],
+        availabilityChanges: [],
+      });
+      notificationService.shouldNotifyPriceChange.mockReturnValue(true);
+      notificationService.sendPriceChangeNotification.mockRejectedValue(
+        new Error('Notification failed'),
+      );
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(loggerService.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to notify price change'),
+        expect.any(String),
+        'SchedulerService',
+      );
+    });
+
+    it('should handle availability change notification errors gracefully', async () => {
+      const mockProduct = {
+        id: '123456',
+        title: 'Test Product',
+        handle: 'test-product',
+        price: 99.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Test description',
+        url: 'https://shop.lumenalta.com/products/test-product',
+      };
+
+      const mockAvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [],
+        availabilityChanges: [mockAvailabilityChange],
+      });
+      notificationService.shouldNotifyAvailabilityChange.mockReturnValue(true);
+      notificationService.sendAvailabilityChangeNotification.mockRejectedValue(
+        new Error('Notification failed'),
+      );
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(loggerService.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to notify availability change'),
+        expect.any(String),
+        'SchedulerService',
+      );
+    });
+
+    it('should include change counts in poll completion log', async () => {
+      const mockProduct = {
+        id: '123456',
+        title: 'Test Product',
+        handle: 'test-product',
+        price: 79.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Test description',
+        url: 'https://shop.lumenalta.com/products/test-product',
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [
+          {
+            product: mockProduct,
+            oldPrice: 99.99,
+            newPrice: 79.99,
+            oldCompareAtPrice: undefined,
+            newCompareAtPrice: undefined,
+          },
+        ],
+        availabilityChanges: [
+          {
+            product: mockProduct,
+            wasAvailable: false,
+            isAvailable: true,
+          },
+        ],
+      });
+      notificationService.shouldNotifyPriceChange.mockReturnValue(false);
+      notificationService.shouldNotifyAvailabilityChange.mockReturnValue(false);
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.priceChanges).toBe(1);
+      expect(result.availabilityChanges).toBe(1);
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        expect.stringContaining('1 price changes'),
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        expect.stringContaining('1 availability changes'),
+      );
+      expect(loggerService.log).toHaveBeenCalledWith(
+        expect.stringContaining('1 price changes'),
+        'SchedulerService',
+      );
+      expect(loggerService.log).toHaveBeenCalledWith(
+        expect.stringContaining('1 availability changes'),
+        'SchedulerService',
+      );
+    });
+  });
+
+  describe('End-to-end flow tests', () => {
+    it('should complete full price change flow: detect → notify → record → emit', async () => {
+      const mockProduct = {
+        id: 'prod-123',
+        title: 'Premium Headphones',
+        handle: 'premium-headphones',
+        price: 149.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'High-quality headphones',
+        url: 'https://shop.lumenalta.com/products/premium-headphones',
+      };
+
+      const existingProduct = {
+        id: 'prod-123',
+        title: 'Premium Headphones',
+        handle: 'premium-headphones',
+        price: 199.99,
+        available: 1,
+        variants: '[]',
+        images: '[]',
+        description: 'High-quality headphones',
+        url: 'https://shop.lumenalta.com/products/premium-headphones',
+        first_seen_at: Date.now() - 86400000,
+        last_seen_at: Date.now() - 3600000,
+      };
+
+      const priceChange = {
+        product: mockProduct,
+        oldPrice: 199.99,
+        newPrice: 149.99,
+        oldCompareAtPrice: undefined,
+        newCompareAtPrice: undefined,
+      };
+
+      shopifyService.getProducts.mockResolvedValue([
+        {
+          ...mockShopifyProducts[0],
+          id: 123,
+          title: 'Premium Headphones',
+          handle: 'premium-headphones',
+          variants: [
+            {
+              ...mockShopifyProducts[0].variants[0],
+              price: '149.99',
+            },
+          ],
+        },
+      ]);
+      databaseService.getProducts.mockReturnValue([existingProduct]);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [priceChange],
+        availabilityChanges: [],
+      });
+      notificationService.shouldNotifyPriceChange.mockReturnValue(true);
+      notificationService.sendPriceChangeNotification.mockResolvedValue(true);
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.priceChanges).toBe(1);
+      expect(differService.compare).toHaveBeenCalled();
+      expect(notificationService.shouldNotifyPriceChange).toHaveBeenCalledWith(
+        mockProduct,
+        priceChange,
+      );
+      expect(
+        notificationService.sendPriceChangeNotification,
+      ).toHaveBeenCalledWith(priceChange);
+      expect(databaseService.saveProducts).toHaveBeenCalled();
+      expect(databaseService.recordPoll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          productCount: 1,
+        }),
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        'Price change: Premium Headphones',
+      );
+      expect(ipcGateway.emitProductsUpdated).toHaveBeenCalled();
+    });
+
+    it('should complete full availability change flow: detect → notify → record → emit', async () => {
+      const mockProduct = {
+        id: 'prod-456',
+        title: 'Gaming Keyboard',
+        handle: 'gaming-keyboard',
+        price: 89.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Mechanical gaming keyboard',
+        url: 'https://shop.lumenalta.com/products/gaming-keyboard',
+      };
+
+      const existingProduct = {
+        id: 'prod-456',
+        title: 'Gaming Keyboard',
+        handle: 'gaming-keyboard',
+        price: 89.99,
+        available: 0,
+        variants: '[]',
+        images: '[]',
+        description: 'Mechanical gaming keyboard',
+        url: 'https://shop.lumenalta.com/products/gaming-keyboard',
+        first_seen_at: Date.now() - 86400000,
+        last_seen_at: Date.now() - 3600000,
+      };
+
+      const availabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      shopifyService.getProducts.mockResolvedValue([
+        {
+          ...mockShopifyProducts[0],
+          id: 456,
+          title: 'Gaming Keyboard',
+          handle: 'gaming-keyboard',
+          available: true,
+        },
+      ]);
+      databaseService.getProducts.mockReturnValue([existingProduct]);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [],
+        availabilityChanges: [availabilityChange],
+      });
+      notificationService.shouldNotifyAvailabilityChange.mockReturnValue(true);
+      notificationService.sendAvailabilityChangeNotification.mockResolvedValue(
+        true,
+      );
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.availabilityChanges).toBe(1);
+      expect(differService.compare).toHaveBeenCalled();
+      expect(
+        notificationService.shouldNotifyAvailabilityChange,
+      ).toHaveBeenCalledWith(mockProduct, availabilityChange);
+      expect(
+        notificationService.sendAvailabilityChangeNotification,
+      ).toHaveBeenCalledWith(availabilityChange);
+      expect(databaseService.saveProducts).toHaveBeenCalled();
+      expect(databaseService.recordPoll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          productCount: 1,
+        }),
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        'Availability change: Gaming Keyboard',
+      );
+      expect(ipcGateway.emitProductsUpdated).toHaveBeenCalled();
+    });
+
+    it('should handle both price and availability changes in single poll', async () => {
+      const product1 = {
+        id: 'prod-111',
+        title: 'Product 1',
+        handle: 'product-1',
+        price: 79.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Product 1',
+        url: 'https://shop.lumenalta.com/products/product-1',
+      };
+
+      const product2 = {
+        id: 'prod-222',
+        title: 'Product 2',
+        handle: 'product-2',
+        price: 49.99,
+        available: false,
+        variants: [],
+        images: [],
+        description: 'Product 2',
+        url: 'https://shop.lumenalta.com/products/product-2',
+      };
+
+      const existingProducts = [
+        {
+          id: 'prod-111',
+          title: 'Product 1',
+          handle: 'product-1',
+          price: 99.99,
+          available: 1,
+          variants: '[]',
+          images: '[]',
+          description: 'Product 1',
+          url: 'https://shop.lumenalta.com/products/product-1',
+          first_seen_at: Date.now() - 86400000,
+          last_seen_at: Date.now() - 3600000,
+        },
+        {
+          id: 'prod-222',
+          title: 'Product 2',
+          handle: 'product-2',
+          price: 49.99,
+          available: 1,
+          variants: '[]',
+          images: '[]',
+          description: 'Product 2',
+          url: 'https://shop.lumenalta.com/products/product-2',
+          first_seen_at: Date.now() - 86400000,
+          last_seen_at: Date.now() - 3600000,
+        },
+      ];
+
+      const priceChange = {
+        product: product1,
+        oldPrice: 99.99,
+        newPrice: 79.99,
+        oldCompareAtPrice: undefined,
+        newCompareAtPrice: undefined,
+      };
+
+      const availabilityChange = {
+        product: product2,
+        wasAvailable: true,
+        isAvailable: false,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(existingProducts);
+      databaseService.saveProducts.mockReturnValue(2);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [product1, product2],
+        priceChanges: [priceChange],
+        availabilityChanges: [availabilityChange],
+      });
+      notificationService.shouldNotifyPriceChange.mockReturnValue(true);
+      notificationService.shouldNotifyAvailabilityChange.mockReturnValue(true);
+      notificationService.sendPriceChangeNotification.mockResolvedValue(true);
+      notificationService.sendAvailabilityChangeNotification.mockResolvedValue(
+        true,
+      );
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.priceChanges).toBe(1);
+      expect(result.availabilityChanges).toBe(1);
+      expect(
+        notificationService.sendPriceChangeNotification,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        notificationService.sendAvailabilityChangeNotification,
+      ).toHaveBeenCalledTimes(1);
+      expect(databaseService.recordPoll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          productCount: 2,
+        }),
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        'Price change: Product 1',
+      );
+      expect(ipcGateway.emitLog).toHaveBeenCalledWith(
+        'info',
+        'Availability change: Product 2',
+      );
+    });
+
+    it('should handle notification failure gracefully without failing the poll', async () => {
+      const mockProduct = {
+        id: 'prod-789',
+        title: 'Test Product',
+        handle: 'test-product',
+        price: 59.99,
+        available: true,
+        variants: [],
+        images: [],
+        description: 'Test',
+        url: 'https://shop.lumenalta.com/products/test-product',
+      };
+
+      const priceChange = {
+        product: mockProduct,
+        oldPrice: 79.99,
+        newPrice: 59.99,
+        oldCompareAtPrice: undefined,
+        newCompareAtPrice: undefined,
+      };
+
+      shopifyService.getProducts.mockResolvedValue(mockShopifyProducts);
+      databaseService.getProducts.mockReturnValue(mockExistingProducts);
+      databaseService.saveProducts.mockReturnValue(1);
+      databaseService.recordPoll.mockReturnValue(1);
+      differService.compare.mockReturnValue({
+        newProducts: [],
+        updatedProducts: [mockProduct],
+        priceChanges: [priceChange],
+        availabilityChanges: [],
+      });
+      notificationService.shouldNotifyPriceChange.mockReturnValue(true);
+      notificationService.sendPriceChangeNotification.mockRejectedValue(
+        new Error('Notification system unavailable'),
+      );
+
+      const result = await service.handlePoll();
+
+      expect(result.success).toBe(true);
+      expect(result.priceChanges).toBe(1);
+      expect(databaseService.saveProducts).toHaveBeenCalled();
+      expect(databaseService.recordPoll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+        }),
+      );
+      expect(loggerService.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to notify price change'),
+        expect.any(String),
+        'SchedulerService',
+      );
+    });
   });
 
   describe('forcePoll', () => {
@@ -546,13 +1281,14 @@ describe('SchedulerService', () => {
       databaseService.getProducts.mockReturnValue([]);
       databaseService.saveProducts.mockReturnValue(1);
       databaseService.recordPoll.mockReturnValue(1);
-      configService.get.mockReturnValue(undefined); // No phone number configured
+      configService.get.mockReturnValue(undefined);
       differService.compare.mockReturnValue({
         newProducts: [],
         updatedProducts: [],
+        priceChanges: [],
+        availabilityChanges: [],
       });
 
-      // Spy on handlePoll
       const handlePollSpy = jest.spyOn(service, 'handlePoll');
 
       const result = await service.forcePoll();
@@ -564,6 +1300,8 @@ describe('SchedulerService', () => {
       expect(handlePollSpy).toHaveBeenCalled();
       expect(result.success).toBe(true);
       expect(result.productCount).toBe(1);
+      expect(result.priceChanges).toBe(0);
+      expect(result.availabilityChanges).toBe(0);
     });
 
     it('should return early when already polling', async () => {

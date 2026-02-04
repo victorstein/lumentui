@@ -1360,35 +1360,7 @@ describe('NotificationService', () => {
       newPrice: 49.99,
     };
 
-    it('should return true when price change notifications are enabled', () => {
-      mockConfigService.get = jest.fn((key: string) => {
-        if (key === 'LUMENTUI_NOTIFY_PRICE_CHANGES') return 'true';
-        return '';
-      });
-
-      const result = service.shouldNotifyPriceChange(
-        mockProduct,
-        mockPriceChange,
-      );
-
-      expect(result).toBe(true);
-    });
-
-    it('should return false when price change notifications are disabled', () => {
-      mockConfigService.get = jest.fn((key: string) => {
-        if (key === 'LUMENTUI_NOTIFY_PRICE_CHANGES') return 'false';
-        return '';
-      });
-
-      const result = service.shouldNotifyPriceChange(
-        mockProduct,
-        mockPriceChange,
-      );
-
-      expect(result).toBe(false);
-    });
-
-    it('should default to true when config is not set', () => {
+    it('should return true when no threshold is set', () => {
       mockConfigService.get = jest.fn().mockReturnValue(undefined);
 
       const result = service.shouldNotifyPriceChange(
@@ -1676,35 +1648,7 @@ describe('NotificationService', () => {
       isAvailable: true,
     };
 
-    it('should return true when availability change notifications are enabled', () => {
-      mockConfigService.get = jest.fn((key: string) => {
-        if (key === 'LUMENTUI_NOTIFY_AVAILABILITY_CHANGES') return 'true';
-        return '';
-      });
-
-      const result = service.shouldNotifyAvailabilityChange(
-        mockProduct,
-        mockAvailabilityChange,
-      );
-
-      expect(result).toBe(true);
-    });
-
-    it('should return false when availability change notifications are disabled', () => {
-      mockConfigService.get = jest.fn((key: string) => {
-        if (key === 'LUMENTUI_NOTIFY_AVAILABILITY_CHANGES') return 'false';
-        return '';
-      });
-
-      const result = service.shouldNotifyAvailabilityChange(
-        mockProduct,
-        mockAvailabilityChange,
-      );
-
-      expect(result).toBe(false);
-    });
-
-    it('should default to true when config is not set', () => {
+    it('should return true when no filters are set', () => {
       mockConfigService.get = jest.fn().mockReturnValue(undefined);
 
       const result = service.shouldNotifyAvailabilityChange(
@@ -1762,6 +1706,190 @@ describe('NotificationService', () => {
       );
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('Rate limiting across notification types', () => {
+    it('should apply 60-minute cooldown to price change notifications', async () => {
+      execFileSuccess();
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      const result1 = await service.sendPriceChangeNotification(priceChange);
+      expect(result1).toBe(true);
+
+      const result2 = await service.sendPriceChangeNotification(priceChange);
+      expect(result2).toBe(false);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+
+      const status = service.getRateLimitStatus(mockProduct.id);
+      expect(status.isLimited).toBe(true);
+      expect(status.minutesUntilUnlocked).toBeGreaterThan(0);
+      expect(status.minutesUntilUnlocked).toBeLessThanOrEqual(60);
+    });
+
+    it('should apply 60-minute cooldown to availability change notifications', async () => {
+      execFileSuccess();
+
+      const availabilityChange: AvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      const result1 =
+        await service.sendAvailabilityChangeNotification(availabilityChange);
+      expect(result1).toBe(true);
+
+      const result2 =
+        await service.sendAvailabilityChangeNotification(availabilityChange);
+      expect(result2).toBe(false);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+
+      const status = service.getRateLimitStatus(mockProduct.id);
+      expect(status.isLimited).toBe(true);
+      expect(status.minutesUntilUnlocked).toBeGreaterThan(0);
+      expect(status.minutesUntilUnlocked).toBeLessThanOrEqual(60);
+    });
+
+    it('should apply rate limit across different notification types for same product', async () => {
+      execFileSuccess();
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      const availabilityChange: AvailabilityChange = {
+        product: mockProduct,
+        wasAvailable: false,
+        isAvailable: true,
+      };
+
+      const result1 = await service.sendPriceChangeNotification(priceChange);
+      expect(result1).toBe(true);
+
+      const result2 =
+        await service.sendAvailabilityChangeNotification(availabilityChange);
+      expect(result2).toBe(false);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockLoggerService.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Rate limit hit'),
+        'NotificationService',
+      );
+    });
+
+    it('should allow notifications for different products independently', async () => {
+      execFileSuccess();
+
+      const product2: ProductDto = {
+        ...mockProduct,
+        id: 'different-product-id',
+        title: 'Different Product',
+      };
+
+      const priceChange1: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      const priceChange2: PriceChange = {
+        product: product2,
+        oldPrice: 79.99,
+        newPrice: 69.99,
+      };
+
+      const result1 = await service.sendPriceChangeNotification(priceChange1);
+      const result2 = await service.sendPriceChangeNotification(priceChange2);
+
+      expect(result1).toBe(true);
+      expect(result2).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+
+      const status1 = service.getRateLimitStatus(mockProduct.id);
+      const status2 = service.getRateLimitStatus(product2.id);
+
+      expect(status1.isLimited).toBe(true);
+      expect(status2.isLimited).toBe(true);
+    });
+
+    it('should track rate limit status per product', async () => {
+      execFileSuccess();
+
+      const product2: ProductDto = {
+        ...mockProduct,
+        id: 'product-2',
+        title: 'Product 2',
+      };
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      await service.sendPriceChangeNotification(priceChange);
+
+      const status1 = service.getRateLimitStatus(mockProduct.id);
+      const status2 = service.getRateLimitStatus(product2.id);
+
+      expect(status1.isLimited).toBe(true);
+      expect(status1.lastNotification).toBeGreaterThan(0);
+      expect(status2.isLimited).toBe(false);
+      expect(status2.lastNotification).toBeNull();
+    });
+
+    it('should clear rate limit cache for all notification types', async () => {
+      execFileSuccess();
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      await service.sendPriceChangeNotification(priceChange);
+
+      let status = service.getRateLimitStatus(mockProduct.id);
+      expect(status.isLimited).toBe(true);
+
+      service.clearRateLimitCache();
+
+      status = service.getRateLimitStatus(mockProduct.id);
+      expect(status.isLimited).toBe(false);
+
+      const result = await service.sendPriceChangeNotification(priceChange);
+      expect(result).toBe(true);
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+    });
+
+    it('should persist rate limit status in database', async () => {
+      execFileSuccess();
+
+      const priceChange: PriceChange = {
+        product: mockProduct,
+        oldPrice: 59.99,
+        newPrice: 49.99,
+      };
+
+      await service.sendPriceChangeNotification(priceChange);
+
+      expect(mockDatabaseService.recordNotification).toHaveBeenCalledWith(
+        mockProduct.id,
+        true,
+        expect.objectContaining({
+          productTitle: mockProduct.title,
+        }),
+      );
     });
   });
 });

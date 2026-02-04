@@ -16,6 +16,7 @@ import { promisify } from 'util';
 import { ProductDto } from '../api/dto/product.dto';
 import { PathsUtil } from '../../common/utils/paths.util';
 import { NotificationService } from '../notification/notification.service';
+import { PriceChange, AvailabilityChange } from '../differ/differ.service';
 
 const execAsync = promisify(exec);
 
@@ -29,6 +30,12 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
   private readonly socketPath: string;
   private isServerRunning = false;
   private schedulerService: any;
+  private readonly LOG_BUFFER_SIZE = 100;
+  private logBuffer: Array<{
+    level: string;
+    message: string;
+    timestamp: number;
+  }> = [];
 
   constructor(
     private readonly configService: ConfigService,
@@ -182,6 +189,12 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       // Send immediate heartbeat so TUI transitions from "Connecting..." to "Connected"
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       ipc.server.emit(socket, 'daemon:heartbeat', { timestamp: Date.now() });
+
+      // Send log history to newly connected client
+      for (const logEntry of this.logBuffer) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        ipc.server.emit(socket, 'log', logEntry);
+      }
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
@@ -489,14 +502,61 @@ export class IpcGateway implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    const logEntry = { level, message, timestamp: Date.now() };
+
+    this.logBuffer.push(logEntry);
+    if (this.logBuffer.length > this.LOG_BUFFER_SIZE) {
+      this.logBuffer.shift();
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    ipc.server.broadcast('log', {
-      level,
-      message,
+    ipc.server.broadcast('log', logEntry);
+
+    this.logger.debug(`Log emitted: [${level}] ${message}`);
+  }
+
+  /**
+   * Emit product price change event to all connected clients
+   * Should be called when a product price or compareAtPrice changes
+   */
+  emitProductPriceChanged(priceChange: PriceChange): void {
+    if (!this.isServerRunning) {
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.broadcast('product:price-changed', {
+      product: priceChange.product,
+      oldPrice: priceChange.oldPrice,
+      newPrice: priceChange.newPrice,
+      oldCompareAtPrice: priceChange.oldCompareAtPrice,
+      newCompareAtPrice: priceChange.newCompareAtPrice,
       timestamp: Date.now(),
     });
 
-    this.logger.debug(`Log emitted: [${level}] ${message}`);
+    this.logger.debug(`Price change emitted: ${priceChange.product.title}`);
+  }
+
+  /**
+   * Emit product availability change event to all connected clients
+   * Should be called when a product becomes available or unavailable
+   */
+  emitProductAvailabilityChanged(availabilityChange: AvailabilityChange): void {
+    if (!this.isServerRunning) {
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    ipc.server.broadcast('product:availability-changed', {
+      product: availabilityChange.product,
+      wasAvailable: availabilityChange.wasAvailable,
+      isAvailable: availabilityChange.isAvailable,
+      timestamp: Date.now(),
+    });
+
+    this.logger.debug(
+      `Availability change emitted: ${availabilityChange.product.title}`,
+    );
   }
 
   /**

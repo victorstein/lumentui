@@ -47,6 +47,32 @@ export interface LogEntry {
 }
 
 /**
+ * Notification history filters
+ */
+export interface NotificationHistoryFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  productId?: string;
+  status?: 'sent' | 'failed';
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Formatted notification entry
+ */
+export interface FormattedNotification {
+  id: number;
+  productId: string;
+  productTitle: string | null;
+  timestamp: number;
+  formattedTimestamp: string;
+  status: 'sent' | 'failed';
+  availabilityChange: string | null;
+  errorMessage: string | null;
+}
+
+/**
  * Daemon state interface
  */
 export interface DaemonState {
@@ -57,6 +83,9 @@ export interface DaemonState {
   error: string | null;
   newProductNotification: Product | null;
   polling: boolean;
+  notificationHistory: FormattedNotification[];
+  loadingHistory: boolean;
+  historyError: string | null;
 }
 
 /**
@@ -72,6 +101,9 @@ export const useDaemon = () => {
     error: null,
     newProductNotification: null,
     polling: false,
+    notificationHistory: [],
+    loadingHistory: false,
+    historyError: null,
   });
 
   const socketPath = PathsUtil.getIpcSocketPath();
@@ -168,6 +200,71 @@ export const useDaemon = () => {
         }));
       });
 
+      // Price change event
+      client.on(
+        'product:price-changed',
+        (data: {
+          product: Product;
+          oldPrice: number;
+          newPrice: number;
+          oldCompareAtPrice?: number;
+          newCompareAtPrice?: number;
+          timestamp: number;
+        }) => {
+          setState((prev) => ({
+            ...prev,
+            products: prev.products.map((p) =>
+              p.id === data.product.id ? data.product : p,
+            ),
+          }));
+        },
+      );
+
+      // Availability change event
+      client.on(
+        'product:availability-changed',
+        (data: {
+          product: Product;
+          wasAvailable: boolean;
+          isAvailable: boolean;
+          timestamp: number;
+        }) => {
+          setState((prev) => ({
+            ...prev,
+            products: prev.products.map((p) =>
+              p.id === data.product.id ? data.product : p,
+            ),
+          }));
+        },
+      );
+
+      // Notification history result
+      client.on(
+        'getNotificationHistory-result',
+        (result: {
+          success: boolean;
+          history: FormattedNotification[];
+          error?: string;
+        }) => {
+          if (result.success) {
+            setState((prev) => ({
+              ...prev,
+              notificationHistory: result.history,
+              loadingHistory: false,
+              historyError: null,
+            }));
+          } else {
+            setState((prev) => ({
+              ...prev,
+              notificationHistory: [],
+              loadingHistory: false,
+              historyError:
+                result.error || 'Failed to fetch notification history',
+            }));
+          }
+        },
+      );
+
       // Error handler — suppress connection errors (shown via Disconnected status)
       client.on('error', (error: Error) => {
         const isConnectionError =
@@ -220,10 +317,34 @@ export const useDaemon = () => {
     }));
   }, []);
 
+  /**
+   * Fetch notification history with optional filters
+   */
+  const fetchNotificationHistory = useCallback(
+    (filters?: NotificationHistoryFilters) => {
+      if (ipc.of['lumentui-daemon']) {
+        setState((prev) => ({
+          ...prev,
+          loadingHistory: true,
+          historyError: null,
+        }));
+        ipc.of['lumentui-daemon'].emit('getNotificationHistory', filters || {});
+      } else {
+        setState((prev) => ({
+          ...prev,
+          loadingHistory: false,
+          historyError: 'Not connected to daemon',
+        }));
+      }
+    },
+    [],
+  );
+
   return {
     ...state,
     forcePoll,
     clearError,
     clearNotification,
+    fetchNotificationHistory,
   };
 };

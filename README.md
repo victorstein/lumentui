@@ -250,19 +250,105 @@ All core services have comprehensive unit tests with 90%+ coverage:
 
 ---
 
+## 🔔 Notification Types
+
+LumenTUI notifies you about three types of product changes (all types are always enabled):
+
+### 1. New Products
+
+When a product appears in the store for the first time.
+
+```
+🔔 New Product Available
+Gaming Mouse - $59.99
+2 variants available
+```
+
+### 2. Price Changes
+
+When a product's price increases or decreases.
+
+```
+🔔 Price Change
+Premium Headphones
+Price dropped from $199.99 to $149.99
+```
+
+**Configuration:**
+
+- `LUMENTUI_NOTIFY_PRICE_THRESHOLD` - Minimum % change to trigger notification (default: `0`)
+  - `0` = Any price change triggers notification
+  - `10` = Only ≥10% changes trigger notification
+  - Applies to both increases and decreases
+
+**Example:** Set threshold to 10% to ignore minor price fluctuations:
+
+```bash
+LUMENTUI_NOTIFY_PRICE_THRESHOLD=10  # Only notify if price changes by 10% or more
+```
+
+### 3. Availability Changes
+
+When a product goes out of stock or comes back in stock.
+
+```
+🔔 Availability Update
+Gaming Keyboard is back in stock!
+Price: $89.99
+```
+
+### Notification Filters
+
+All notification types respect these filters:
+
+| Filter                          | Description                                | Example                    |
+| ------------------------------- | ------------------------------------------ | -------------------------- |
+| `LUMENTUI_NOTIFY_MIN_PRICE`     | Minimum product price to trigger notify    | `50` (ignore items <$50)   |
+| `LUMENTUI_NOTIFY_KEYWORDS`      | Product title must contain one of keywords | `gaming,mouse,keyboard`    |
+| `NOTIFICATION_THROTTLE_MINUTES` | Rate limit per product (cooldown period)   | `60` (1 hour, recommended) |
+
+**Example:** Only notify about gaming products over $100:
+
+```bash
+LUMENTUI_NOTIFY_MIN_PRICE=100
+LUMENTUI_NOTIFY_KEYWORDS=gaming,esports
+```
+
+### Rate Limiting
+
+To prevent notification spam, LumenTUI enforces a **60-minute cooldown** per product:
+
+- After sending any notification for a product, no further notifications for that product will be sent for 60 minutes
+- Rate limit applies across all notification types (new product, price change, availability change)
+- Different products have independent rate limits
+- Rate limit persists across daemon restarts (stored in database)
+
+**Example:** Product A's price drops at 2:00 PM:
+
+- ✅ 2:00 PM - Price drop notification sent
+- ❌ 2:15 PM - Product goes out of stock (notification blocked, within 60-min window)
+- ❌ 2:45 PM - Product back in stock (notification blocked, within 60-min window)
+- ✅ 3:01 PM - Price increases (notification sent, cooldown expired)
+
+---
+
 ## 🔧 Configuration
 
 ### Environment Variables
 
-| Variable                 | Description            | Default                    | Required |
-| ------------------------ | ---------------------- | -------------------------- | -------- |
-| `LUMENTUI_SHOP_URL`      | Shopify store URL      | https://shop.lumenalta.com | ✅       |
-| `DB_PATH`                | SQLite database path   | data/lumentui.db           | ❌       |
-| `LOG_LEVEL`              | Logging level          | info                       | ❌       |
-| `LOG_FILE`               | Log file path          | data/logs/app.log          | ❌       |
-| `SHOPIFY_TIMEOUT_MS`     | API timeout            | 10000                      | ❌       |
-| `SHOPIFY_RETRY_ATTEMPTS` | Retry attempts         | 3                          | ❌       |
-| `LUMENTUI_COOKIES`       | Manual cookie override | -                          | ❌       |
+| Variable                          | Description                                   | Default                    | Required |
+| --------------------------------- | --------------------------------------------- | -------------------------- | -------- |
+| `LUMENTUI_SHOP_URL`               | Shopify store URL                             | https://shop.lumenalta.com | ✅       |
+| `DB_PATH`                         | SQLite database path                          | data/lumentui.db           | ❌       |
+| `LOG_LEVEL`                       | Logging level                                 | info                       | ❌       |
+| `LOG_FILE`                        | Log file path                                 | data/logs/app.log          | ❌       |
+| `SHOPIFY_TIMEOUT_MS`              | API timeout                                   | 10000                      | ❌       |
+| `SHOPIFY_RETRY_ATTEMPTS`          | Retry attempts                                | 3                          | ❌       |
+| `LUMENTUI_COOKIES`                | Manual cookie override                        | -                          | ❌       |
+| `LUMENTUI_NOTIFY_PRICE_THRESHOLD` | Min % price change to notify (0 = any change) | 0                          | ❌       |
+| `LUMENTUI_NOTIFY_MIN_PRICE`       | Minimum product price to notify               | 0                          | ❌       |
+| `LUMENTUI_NOTIFY_KEYWORDS`        | Comma-separated keywords filter               | -                          | ❌       |
+| `NOTIFICATION_THROTTLE_MINUTES`   | Rate limit cooldown per product (minutes)     | 60                         | ❌       |
 
 ### Database Schema
 

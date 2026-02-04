@@ -602,18 +602,6 @@ export class NotificationService implements OnModuleInit {
     product: ProductDto,
     priceChange: PriceChange,
   ): boolean {
-    const priceChangesEnabled = this.configService.get<string>(
-      'LUMENTUI_NOTIFY_PRICE_CHANGES',
-    );
-
-    if (priceChangesEnabled === 'false') {
-      this.logger.log(
-        `Price change notifications disabled for product ${product.id}`,
-        'NotificationService',
-      );
-      return false;
-    }
-
     const thresholdStr = this.configService.get<string>(
       'LUMENTUI_NOTIFY_PRICE_THRESHOLD',
       '0',
@@ -643,18 +631,6 @@ export class NotificationService implements OnModuleInit {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     availabilityChange: AvailabilityChange,
   ): boolean {
-    const availabilityChangesEnabled = this.configService.get<string>(
-      'LUMENTUI_NOTIFY_AVAILABILITY_CHANGES',
-    );
-
-    if (availabilityChangesEnabled === 'false') {
-      this.logger.log(
-        `Availability change notifications disabled for product ${product.id}`,
-        'NotificationService',
-      );
-      return false;
-    }
-
     return this.shouldNotify(product);
   }
 
