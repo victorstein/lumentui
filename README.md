@@ -2,8 +2,9 @@
 
 > Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time macOS notifications
 
-[![Tests](https://img.shields.io/badge/tests-76%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-179%20passing-brightgreen)]()
 [![Coverage](<https://img.shields.io/badge/coverage-93%25%20(core)-green>)]()
+[![Version](https://img.shields.io/badge/version-1.2.3-blue)]()
 [![NestJS](https://img.shields.io/badge/NestJS-11.x-red)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)]()
 
@@ -15,14 +16,16 @@ LumenTUI is a production-ready NestJS application that monitors product availabi
 
 ### ✨ Key Features
 
-- 🔄 **Real-time Monitoring** - Polls Shopify storefront API for product updates
+- 🔄 **Real-time Monitoring** - Configurable polling of Shopify storefront API
 - 📱 **macOS Notifications** - Instant native notification center alerts
 - 🍪 **Cookie-based Auth** - Secure authentication using macOS Chrome Keychain
 - 💾 **SQLite Storage** - Lightweight, reliable product tracking
 - 🏗️ **NestJS Architecture** - Modular, scalable, testable design
-- 🧪 **High Test Coverage** - 76 unit tests with 93%+ coverage on core services
-- 🔐 **Production Ready** - Environment-based config, proper logging
-- 📊 **CLI Interface** - Commander.js-based command interface
+- 🧪 **High Test Coverage** - 179 unit tests with 93%+ coverage on core services
+- 🔐 **Production Ready** - Daemon mode, IPC layer, proper logging
+- 📊 **Full CLI** - Complete command interface (login, start, stop, status, logs)
+- 🌍 **Cross-platform** - Works on macOS, Linux, and Windows
+- 📦 **Easy Distribution** - npm package and Homebrew tap
 
 ---
 
@@ -32,16 +35,22 @@ LumenTUI is a production-ready NestJS application that monitors product availabi
 
 ```
 AppModule
-├── ConfigModule         # Environment configuration (global)
-├── LoggerModule         # Winston-based structured logging
-├── AuthModule           # Cookie extraction & storage
-│   └── AuthService      # chrome-cookies-secure integration
-├── ApiModule            # Shopify API integration
-│   └── ShopifyService   # HTTP client with retry logic
-├── StorageModule        # SQLite database layer
-│   └── DatabaseService  # Product CRUD operations
-└── NotificationModule   # macOS notifications
-    └── NotificationService  # Native notification center integration
+├── ConfigModule            # Environment configuration (global)
+├── LoggerModule            # Winston-based structured logging
+├── AuthModule              # Cookie extraction & storage
+│   └── AuthService         # chrome-cookies-secure integration
+├── ApiModule               # Shopify API integration
+│   └── ShopifyService      # HTTP client with retry logic
+├── StorageModule           # SQLite database layer
+│   └── DatabaseService     # Product CRUD operations
+├── SchedulerModule         # Polling scheduler
+│   └── SchedulerService    # Configurable interval polling
+├── IpcModule               # Inter-process communication
+│   └── IpcGateway          # Unix socket/Named pipe server
+├── DifferModule            # Change detection
+│   └── DifferService       # Product comparison logic
+└── NotificationModule      # macOS notifications
+    └── NotificationService # Native notification center integration
 ```
 
 ### Data Flow
@@ -70,7 +79,7 @@ AppModule
 ## 📋 Requirements
 
 - **Node.js** >= 18.x
-- **npm** >= 9.x
+- **pnpm** >= 10.x (for development)
 - **macOS** (for Chrome Keychain integration and native notifications)
 - **Chrome Browser** (with valid shop.lumenalta.com session)
 
@@ -96,8 +105,8 @@ npm install -g lumentui
 ```bash
 git clone https://github.com/victorstein/lumentui.git
 cd lumentui
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ### 2. Configure Environment
@@ -123,8 +132,7 @@ LOG_LEVEL=info                            # Logging level
 Extract cookies from Chrome (requires Keychain access):
 
 ```bash
-npm run build
-node dist/cli.js auth
+lumentui login
 ```
 
 Expected output:
@@ -138,7 +146,7 @@ Expected output:
 Verify session:
 
 ```bash
-node dist/cli.js auth --check
+lumentui login --check
 ```
 
 ---
@@ -148,21 +156,21 @@ node dist/cli.js auth --check
 ### Development Mode
 
 ```bash
-# Start with hot-reload
-npm run start:dev
+# Start daemon with hot-reload
+pnpm run dev
 
 # Run with debug logging
-LOG_LEVEL=debug npm run start:dev
+LOG_LEVEL=debug pnpm run dev
 ```
 
 ### Production Mode
 
 ```bash
 # Build for production
-npm run build
+pnpm run build
 
-# Start production server
-npm run start:prod
+# Start CLI
+lumentui start
 ```
 
 ### CLI Commands
@@ -174,14 +182,23 @@ lumentui login
 # Verify current session
 lumentui login --check
 
-# Start daemon + TUI (planned)
+# Start daemon + TUI
 lumentui start
 
-# Stop daemon (planned)
+# Stop daemon
 lumentui stop
 
-# Check daemon status (planned)
+# Check daemon status
 lumentui status
+
+# View daemon logs
+lumentui logs
+
+# Manage configuration
+lumentui config
+
+# Trigger manual poll
+lumentui poll
 ```
 
 ---
@@ -191,53 +208,41 @@ lumentui status
 ### Run All Tests
 
 ```bash
-npm test
+pnpm test
 ```
 
 ### Watch Mode
 
 ```bash
-npm run test:watch
+pnpm run test:watch
 ```
 
 ### Coverage Report
 
 ```bash
-npm run test:cov
+pnpm run test:cov
 ```
 
 Expected output:
 
 ```
-Test Suites: 6 passed, 6 total
-Tests:       76 passed, 76 total
+Test Suites: 11 passed, 11 total
+Tests:       179 passed, 179 total
 Coverage:    93%+ (core services average)
 ```
 
-### Test Files
+### Test Coverage
 
-| Module                  | Tests      | Coverage |
-| ----------------------- | ---------- | -------- |
-| **AuthService**         | Unit tests | 91.04%   |
-| **ShopifyService**      | Unit tests | 85.71%   |
-| **DatabaseService**     | Unit tests | 98.24%   |
-| **NotificationService** | Unit tests | 100%     |
-| **SchedulerService**    | Unit tests | 93.54%   |
-| **AppController**       | Unit tests | 100%     |
+All core services have comprehensive unit tests with 90%+ coverage:
 
----
-
-## 📡 API Endpoints
-
-Currently CLI-only, but the NestJS foundation supports REST endpoints:
-
-```typescript
-// Example endpoints (planned)
-GET  /api/products         // List all tracked products
-GET  /api/products/:id     // Get product details
-POST /api/auth/validate    // Validate cookies
-GET  /api/health           // Health check
-```
+- **AuthService** - Cookie extraction and storage
+- **ShopifyService** - API integration with retry logic
+- **DatabaseService** - SQLite operations and migrations
+- **NotificationService** - macOS notification delivery
+- **SchedulerService** - Polling and cron jobs
+- **IpcGateway** - Unix socket communication
+- **DifferService** - Product change detection
+- **PathsUtil** - Cross-platform path resolution
 
 ---
 
@@ -315,8 +320,11 @@ lumentui/
 │       ├── notification/          # macOS notifications
 │       │   └── notification.service.ts
 │       │
-│       ├── poller/                # Polling scheduler (WIP)
-│       └── ipc/                   # Unix socket IPC (WIP)
+│       ├── scheduler/             # Polling scheduler
+│       │   └── scheduler.service.ts
+│       │
+│       └── ipc/                   # Unix socket IPC
+│           └── ipc.gateway.ts
 │
 ├── data/                          # Runtime data
 │   ├── lumentui.db                # SQLite database
@@ -329,8 +337,6 @@ lumentui/
 │
 ├── .env                           # Environment config (gitignored)
 ├── .env.example                   # Environment template
-├── .env.production                # Production config template
-├── ecosystem.config.js            # PM2 configuration
 ├── package.json                   # Dependencies & scripts
 ├── tsconfig.json                  # TypeScript config
 ├── nest-cli.json                  # NestJS CLI config
@@ -349,18 +355,16 @@ lumentui/
 
 1. Open Chrome and log into shop.lumenalta.com
 2. Grant Keychain access when prompted
-3. Run `node dist/cli.js auth` again
+3. Run `lumentui login` again
 
 **Problem:** `❌ No valid session`
 
 **Solution:**
 
 ```bash
-# Clear old cookies
-rm data/cookies.json
-
-# Re-authenticate
-node dist/cli.js auth
+# Clear old cookies and re-authenticate
+lumentui logout
+lumentui login
 ```
 
 ---
@@ -384,12 +388,15 @@ rm data/lumentui.db-wal data/lumentui.db-shm
 **Solution:**
 
 ```bash
-# Backup old database
-cp data/lumentui.db data/lumentui.db.backup
+# Stop daemon
+lumentui stop
 
-# Start fresh
-rm data/lumentui.db
-npm run start:dev  # Database will be recreated
+# Backup old database (macOS/Linux)
+cp ~/.local/share/lumentui/lumentui.db ~/.local/share/lumentui/lumentui.db.backup
+
+# Start fresh (database will be recreated)
+rm ~/.local/share/lumentui/lumentui.db
+lumentui start
 ```
 
 ---
@@ -435,12 +442,12 @@ SHOPIFY_RETRY_ATTEMPTS=5
 
 ```bash
 # Clean install
-rm -rf node_modules package-lock.json
-npm install
+rm -rf node_modules pnpm-lock.yaml
+pnpm install
 
 # Rebuild
-npm run build
-npm test
+pnpm run build
+pnpm test
 ```
 
 **Problem:** Test database conflicts
@@ -450,7 +457,7 @@ Tests use in-memory SQLite by default. If issues persist:
 
 ```bash
 # Use separate test database
-DB_PATH=:memory: npm test
+DB_PATH=:memory: pnpm test
 ```
 
 ---
@@ -490,28 +497,28 @@ DB_PATH=:memory: npm test
 ### Adding a New Module
 
 ```bash
-nest g module modules/mymodule
-nest g service modules/mymodule
-nest g controller modules/mymodule
+pnpm exec nest g module modules/mymodule
+pnpm exec nest g service modules/mymodule
+pnpm exec nest g controller modules/mymodule
 ```
 
 ### Running Linter
 
 ```bash
-npm run lint
+pnpm run lint
 ```
 
 ### Formatting Code
 
 ```bash
-npm run format
+pnpm run format
 ```
 
 ### Debugging
 
 ```bash
 # Start with Node inspector
-npm run start:debug
+pnpm run dev:debug
 
 # Connect with Chrome DevTools:
 # chrome://inspect
@@ -567,42 +574,69 @@ GitHub: [@victorstein](https://github.com/victorstein)
 
 ## 📅 Changelog
 
+### v1.2.3 (2026-02-03)
+
+✅ Latest release:
+
+- Daemon mode with background process management
+- Full CLI with login, start, stop, status, logs, config, poll commands
+- IPC layer (Unix sockets/Named pipes)
+- Cross-platform path support (macOS, Linux, Windows)
+- PID file management
+- Configurable poll interval
+- Automated releases via GitHub Actions
+- npm and Homebrew distribution
+
 ### v1.0.0 (2025-01-21)
 
-✅ Initial release with complete implementation:
+✅ Initial release:
 
 - Auth module with Chrome cookie extraction
 - API module with Shopify integration + retry logic
 - Storage module with SQLite persistence
-- Scheduler module with cron jobs (30min polls)
+- Scheduler module with configurable polling
 - Notification module with native macOS notifications
-- Full test coverage (76 tests, 93%+ coverage on core services)
-- Integration tests for end-to-end flow
+- Full test coverage (179 tests, 93%+ coverage on core services)
 - CLI interface with Commander.js
-- Complete documentation (README, DEPLOYMENT, TESTING)
-- Production-ready with PM2 support
 
 ---
 
 ## 🚀 Roadmap
 
-### Phase 2 (Planned)
+### Phase 2 (Completed ✅)
 
-- [ ] Daemon mode with PM2
-- [ ] Ink-based TUI (React)
-- [ ] IPC communication (Unix sockets)
-- [ ] Real-time product list view
-- [ ] Product detail modal
-- [ ] Log streaming panel
+- [x] Daemon mode with background process management
+- [x] Ink-based TUI (React terminal interface)
+- [x] IPC communication (Unix sockets/Named pipes)
+- [x] Real-time product list view
+- [x] CLI commands (login, start, stop, status, logs, config, poll)
+- [x] Configurable poll interval
+- [x] Cross-platform path support (macOS, Linux, Windows)
+- [x] PID file management
+- [x] GitHub Actions CI/CD pipeline
+- [x] Homebrew tap distribution
+- [x] npm package distribution
 
-### Phase 3 (Future)
+### Phase 3 (Current)
+
+- [ ] Product detail modal in TUI
+- [ ] Interactive product filtering/search
+- [ ] TUI settings panel
+- [ ] Notification history view
+- [ ] Export product data (JSON/CSV)
+
+### Phase 4 (Future)
 
 - [ ] REST API endpoints
 - [ ] Swagger documentation
+- [ ] Web dashboard (React)
 - [ ] Docker support
 - [ ] Multi-store support
 - [ ] Email notifications
 - [ ] Webhook support
+- [ ] Slack/Discord integrations
+- [ ] Product price tracking
+- [ ] Historical availability charts
 
 ---
 
