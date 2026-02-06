@@ -134,7 +134,7 @@ describe('PathsUtil', () => {
     it('should return cookies file path in data directory', () => {
       const cookiesPath = PathsUtil.getDefaultCookiesPath();
       expect(cookiesPath).toContain('lumentui');
-      expect(cookiesPath).toContain('cookies.json');
+      expect(cookiesPath).toContain('cookies.enc');
     });
   });
 
