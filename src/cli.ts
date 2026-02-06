@@ -213,8 +213,14 @@ class CliValidator {
       errors.push(timeoutResult.error!);
     }
 
+    // Ensure data directory exists before validating paths
+    const dataDir = PathsUtil.getDataDir();
+    const logsDir = path.join(dataDir, 'logs');
+    PathsUtil.ensureDir(dataDir);
+    PathsUtil.ensureDir(logsDir);
+
     // Validate database path (parent dir must be writable)
-    const dbPath = process.env.DB_PATH || 'data/lumentui.db';
+    const dbPath = process.env.DB_PATH || PathsUtil.getDefaultDbPath();
     const dbResult = this.validateFilePath(dbPath, {
       shouldBeWritable: true,
       name: 'DB_PATH',
@@ -224,7 +230,7 @@ class CliValidator {
     }
 
     // Validate log file path (parent dir must be writable)
-    const logPath = process.env.LOG_FILE || 'data/logs/app.log';
+    const logPath = process.env.LOG_FILE || PathsUtil.getDefaultLogPath();
     const logResult = this.validateFilePath(logPath, {
       shouldBeWritable: true,
       name: 'LOG_FILE',
