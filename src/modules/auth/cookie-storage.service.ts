@@ -1,17 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
-  unlinkSync,
-} from 'fs';
-import { homedir } from 'os';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { machineIdSync } from 'node-machine-id';
 import { Cookie } from './interfaces/cookie.interface';
+import { PathsUtil } from '../../common/utils/paths.util';
 
 /**
  * Cookie storage data structure with metadata
@@ -33,16 +27,13 @@ interface CookieStorageData {
 
 @Injectable()
 export class CookieStorageService {
-  private readonly STORAGE_DIR = join(homedir(), '.lumentui');
+  private readonly STORAGE_DIR = PathsUtil.getDataDir();
   private readonly COOKIE_FILE = join(this.STORAGE_DIR, 'cookies.enc');
   private readonly ALGORITHM = 'aes-256-gcm';
   private readonly STORAGE_VERSION = 2; // Version 2: stores full Cookie objects
 
   constructor(private readonly configService: ConfigService) {
-    // Ensure storage directory exists
-    if (!existsSync(this.STORAGE_DIR)) {
-      mkdirSync(this.STORAGE_DIR, { recursive: true });
-    }
+    PathsUtil.ensureDir(this.STORAGE_DIR);
   }
 
   private getEncryptionKey(): Buffer {

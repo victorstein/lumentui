@@ -159,10 +159,10 @@ export class PathsUtil {
   }
 
   /**
-   * Get the default cookies file path
+   * Get the default cookies file path (encrypted storage)
    */
   static getDefaultCookiesPath(): string {
-    return path.join(this.getDataDir(), 'cookies.json');
+    return path.join(this.getDataDir(), 'cookies.enc');
   }
 
   /**
