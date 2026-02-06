@@ -1,6 +1,6 @@
 {
   "name": "lumentui",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Elegant NestJS-based product monitoring system for shop.lumenalta.com with real-time macOS notifications",
   "author": "Stein Hakase <stein.hakase.vs@gmail.com>",
   "private": false,
