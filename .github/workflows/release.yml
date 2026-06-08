@@ -131,9 +131,9 @@ jobs:
           )
 
           # Clone the tap repo, update formula, and push
-          git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/victorstein/homebrew-lumentui.git /tmp/homebrew-lumentui
-          echo "${FORMULA}" > /tmp/homebrew-lumentui/Formula/lumentui.rb
-          cd /tmp/homebrew-lumentui
+          git clone https://x-access-token:${{ secrets.TAP_GITHUB_TOKEN }}@github.com/victorstein/homebrew-tap.git /tmp/homebrew-tap
+          echo "${FORMULA}" > /tmp/homebrew-tap/Formula/lumentui.rb
+          cd /tmp/homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/lumentui.rb
@@ -156,6 +156,6 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Published to:" >> $GITHUB_STEP_SUMMARY
             echo "- 📦 npm: https://www.npmjs.com/package/lumentui/v/${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-            echo "- 🍺 Homebrew: https://github.com/victorstein/homebrew-lumentui" >> $GITHUB_STEP_SUMMARY
+            echo "- 🍺 Homebrew: https://github.com/victorstein/homebrew-tap" >> $GITHUB_STEP_SUMMARY
             echo "- 🏷️ GitHub: https://github.com/victorstein/lumentui/releases/tag/${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           fi
